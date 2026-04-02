@@ -1,76 +1,123 @@
 // Netlify Function: 实时拉取徽商故里营收数据
+// 收银系统API文档: https://doc.wuuxiang.com/showdoc/web/#/46/460
 const https = require('https');
 
 const APP_ID = '2f30be60293b4f8e8d82dbc272418ba9';
 const ACCESS_ID = '1d2297864eda4f6db7a00b04260c18db';
-const CENTER_ID = 247412;
+const CENTER_ID = 247412; // 集团ID
+const SYSTEM_ONLINE_YEAR = 2025;
+const SYSTEM_ONLINE_MONTH = 6; // 6月初上线
 
-// 封装 HTTPS 请求
-function httpPost(url, data) {
+// ── HTTPS 请求 ─────────────────────────────────────────────────
+function httpRequest(options, body) {
   return new Promise((resolve, reject) => {
-    const body = JSON.stringify(data);
-    const urlObj = new URL(url);
-    const options = {
-      hostname: urlObj.hostname,
-      path: urlObj.pathname + urlObj.search,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body),
-      },
-    };
     const req = https.request(options, (res) => {
       let raw = '';
-      res.on('data', (chunk) => { raw += chunk; });
+      res.on('data', c => raw += c);
       res.on('end', () => {
         try { resolve(JSON.parse(raw)); }
         catch (e) { reject(new Error('JSON parse error: ' + raw)); }
       });
     });
     req.on('error', reject);
-    req.write(body);
+    if (body) req.write(body);
     req.end();
   });
 }
 
-// 获取 token
+// ── 获取 Token ────────────────────────────────────────────────
 async function getToken() {
   const url = `https://cysms.wuuxiang.com/api/auth/accesstoken?appid=${APP_ID}&accessid=${ACCESS_ID}&response_type=token`;
-  const res = await httpPost(url, {});
+  const options = {
+    hostname: 'cysms.wuuxiang.com',
+    path: '/api/auth/accesstoken?appid=' + APP_ID + '&accessid=' + ACCESS_ID + '&response_type=token',
+    method: 'POST',
+    headers: { 'Content-Length': 0 }
+  };
+  const res = await httpRequest(options, '');
+  if (!res.access_token) throw new Error('获取Token失败: ' + JSON.stringify(res));
   return res.access_token;
 }
 
-// 查询某月数据
-async function fetchMonth(token, year, month) {
-  const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-  const lastDay = new Date(year, month, 0).getDate();
-  const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
-  const res = await httpPost('https://cysms.wuuxiang.com/api/datatransfer/getBusinessSituation', {
-    centerId: CENTER_ID,
-    startDate,
-    endDate,
-    token,
-  });
-  return res?.data?.List || [];
+// ── 查询营收数据 ────────────────────────────────────────────────
+// dateType: 'day' | 'month' | 'year'
+// settleDate: 'YYYY-MM-DD' (day) | 'YYYY-MM' (month) | 'YYYY' (year)
+async function queryRevenue(token, settleDate, dateType) {
+  const qs = `centerId=${CENTER_ID}&settleDate=${settleDate}&dateType=${dateType}`;
+  const options = {
+    hostname: 'cysms.wuuxiang.com',
+    path: '/api/datatransfer/getBusinessSituation?' + qs,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': 0,
+      'access_token': token,
+      'accessid': ACCESS_ID,
+      'granttype': 'client'
+    }
+  };
+  return await httpRequest(options, '');
 }
 
-// 门店区域映射
-const REGION_MAP = {
-  '北京': ['北京光熙门店','北京望京店','北京颐提港店'],
-  '合肥': ['合肥万象城店','合肥万达店','合肥银泰店','合肥庐州府店','合肥滨湖吾悦店','合肥中环城店','合肥大悦城店','合肥融创茂店'],
-  '黄山': ['黄山屯溪老街店','黄山老街徽府店','黄山万达店','黄山迎客松店'],
-  '皖北': ['亳州万达店','宿州万达店','阜阳吾悦店','淮北吾悦店','蚌埠吾悦店','淮南吾悦店'],
-  '浙沪': ['上海七宝万科店','杭州西溪印象城店','宁波万象城店','温州印象城店'],
-  '其他': ['芜湖吾悦店','铜陵吾悦店','安庆吾悦店','马鞍山吾悦店','滁州吾悦店','池州九华天街店','宣城吾悦店','六安吾悦店'],
+// ── 门店区域映射（基于导出数据-机构信息202604021314.xlsx）─────────
+const STORE_REGION_MAP = {
+  // 北京区域
+  '徽商故里朝阳门店': '北京',
+  '徽商故里三里河店': '北京',
+  '徽商故里广安门店': '北京',
+  '徽商故里元大都店': '北京',
+  '徽商故里双井店': '北京',
+  // 华北天津/济南
+  '徽商故里天津店': '华北',
+  '徽商故里济南店': '华北',
+  // 合肥区域
+  '徽商故里罍街店': '合肥',
+  '徽商故里大蜀山店': '合肥',
+  '徽商故里贡街店': '合肥',
+  '徽商故里小馆店': '合肥',
+  '徽商故里水西门店': '合肥',
+  '徽商故里芜湖店': '合肥',
+  '徽商故里骆岗店': '合肥',
+  '徽商故里云城里店': '合肥',
+  '徽商故里繁昌店': '合肥',
+  // 皖北
+  '徽商故里蚌埠店': '皖北',
+  '徽商故里滁州店': '皖北',
+  '徽商故里阜阳店': '皖北',
+  '徽商故里六安店': '皖北',
+  '徽商故里淮南店': '皖北',
+  // 浙沪
+  '徽商故里虹桥店': '浙沪',
+  '徽商故里陆家嘴店': '浙沪',
+  '徽商故里宁波店': '浙沪',
+  '徽商故里杭州店': '浙沪',
+  '徽商故里昆山店': '浙沪',
+  // 其他
+  '徽商故里仙人洞店': '黄山',
+  '徽商故里深圳店': '华南',
+  '徽商故里虚拟总部店': '其他',
 };
 
+const REGIONS = ['北京', '华北', '合肥', '皖北', '浙沪', '黄山', '华南', '其他'];
+
 function getRegion(shopName) {
-  for (const [region, shops] of Object.entries(REGION_MAP)) {
-    if (shops.some(s => shopName.includes(s) || s.includes(shopName))) return region;
-  }
-  return '其他';
+  return STORE_REGION_MAP[shopName] || '其他';
 }
 
+// ── 生成日期序列 ───────────────────────────────────────────────
+function generateMonthRange(startYear, startMonth, endYear, endMonth) {
+  const months = [];
+  for (let y = startYear; y <= endYear; y++) {
+    const sm = y === startYear ? startMonth : 1;
+    const em = y === endYear ? endMonth : 12;
+    for (let m = sm; m <= em; m++) {
+      months.push({ year: y, month: m, key: `${y}-${String(m).padStart(2, '0')}` });
+    }
+  }
+  return months;
+}
+
+// ── 主函数 ─────────────────────────────────────────────────────
 exports.handler = async function(event, context) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -82,84 +129,59 @@ exports.handler = async function(event, context) {
     const now = new Date();
     const curYear = now.getFullYear();
     const curMonth = now.getMonth() + 1;
-    const today = now.toISOString().slice(0, 10);
+    const curDay = now.getDate();
+    const today = `${curYear}-${String(curMonth).padStart(2, '0')}-${String(curDay).padStart(2, '0')}`;
 
-    // 拉取从2025年5月到当前月的所有数据
-    const allMonthData = {}; // key: "YYYY-MM"
+    // 确定数据范围：2025年6月上线 → 至今
+    const months = generateMonthRange(SYSTEM_ONLINE_YEAR, SYSTEM_ONLINE_MONTH, curYear, curMonth);
 
-    // 确定需要拉取的年月范围
-    const months = [];
-    for (let y = 2025; y <= curYear; y++) {
-      const startM = (y === 2025) ? 5 : 1;
-      const endM = (y === curYear) ? curMonth : 12;
-      for (let m = startM; m <= endM; m++) {
-        months.push({ year: y, month: m });
-      }
+    // ── 1. 拉取每日数据（过去90天）─────────────────────────────
+    const ninetyDaysAgo = new Date(now);
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const dailyData = {};
+
+    const days90 = [];
+    for (let d = new Date(ninetyDaysAgo); d <= now; d.setDate(d.getDate() + 1)) {
+      const ds = d.toISOString().slice(0, 10);
+      days90.push(ds);
     }
 
-    // 今日数据
-    const todayRes = await httpPost('https://cysms.wuuxiang.com/api/datatransfer/getBusinessSituation', {
-      centerId: CENTER_ID,
-      startDate: today,
-      endDate: today,
-      token,
-    });
-    const todayList = todayRes?.data?.List || [];
-
-    // 并行拉取所有月份（限制并发）
-    const batchSize = 4;
-    for (let i = 0; i < months.length; i += batchSize) {
-      const batch = months.slice(i, i + batchSize);
-      const results = await Promise.all(batch.map(({ year, month }) => fetchMonth(token, year, month)));
-      batch.forEach(({ year, month }, idx) => {
-        allMonthData[`${year}-${String(month).padStart(2, '0')}`] = results[idx];
-      });
+    console.log('拉取日数据: ' + days90.length + '天');
+    for (const day of days90) {
+      const res = await queryRevenue(token, day, 'day');
+      const orig = res?.data?.List?.businessData?.orig || 0;
+      dailyData[day] = parseFloat(orig) / 10000; // 转为万元
+      await new Promise(r => setTimeout(r, 150));
     }
 
-    // 整理门店列表（从当前月数据中提取）
-    const curMonthKey = `${curYear}-${String(curMonth).padStart(2, '0')}`;
-    const shopSet = new Map();
-
-    // 收集所有出现过的门店
-    for (const list of Object.values(allMonthData)) {
-      for (const item of list) {
-        const bd = item?.businessData;
-        if (!bd) continue;
-        const name = bd.name || item.name || '';
-        if (name && !shopSet.has(name)) {
-          shopSet.set(name, { name, region: getRegion(name) });
-        }
-      }
+    // ── 2. 拉取每月数据 ─────────────────────────────────────────
+    const monthlyData = {};
+    console.log('拉取月数据: ' + months.length + '个月');
+    for (const { key } of months) {
+      const [y, m] = key.split('-');
+      const res = await queryRevenue(token, `${y}-${m}`, 'month');
+      const orig = res?.data?.List?.businessData?.orig || 0;
+      monthlyData[key] = parseFloat(orig) / 10000;
+      await new Promise(r => setTimeout(r, 150));
     }
 
-    const allShops = Array.from(shopSet.values());
-
-    // 按月汇总各门店营收
-    const monthlyRevenue = {}; // key: shopName -> { "YYYY-MM": amount }
-    for (const [monthKey, list] of Object.entries(allMonthData)) {
-      for (const item of list) {
-        const bd = item?.businessData;
-        if (!bd) continue;
-        const name = bd.name || item.name || '';
-        const amount = parseFloat(bd.orig || 0) / 10000;
-        if (!name) continue;
-        if (!monthlyRevenue[name]) monthlyRevenue[name] = {};
-        monthlyRevenue[name][monthKey] = (monthlyRevenue[name][monthKey] || 0) + amount;
-      }
+    // ── 3. 拉取每年数据 ─────────────────────────────────────────
+    const years = [...new Set(months.map(m => m.year))];
+    const yearlyData = {};
+    console.log('拉取年数据: ' + years.length + '年');
+    for (const year of years) {
+      const res = await queryRevenue(token, String(year), 'year');
+      const orig = res?.data?.List?.businessData?.orig || 0;
+      yearlyData[String(year)] = parseFloat(orig) / 10000;
+      await new Promise(r => setTimeout(r, 150));
     }
 
-    // 今日营收
-    const todayRevenue = {};
-    for (const item of todayList) {
-      const bd = item?.businessData;
-      if (!bd) continue;
-      const name = bd.name || item.name || '';
-      const amount = parseFloat(bd.orig || 0) / 10000;
-      if (name) todayRevenue[name] = (todayRevenue[name] || 0) + amount;
-    }
-
-    // 可用年份列表
-    const availableYears = [...new Set(months.map(m => m.year))].sort();
+    // ── 4. 构建门店列表 ─────────────────────────────────────────
+    const allShops = Object.keys(STORE_REGION_MAP).map(name => ({
+      name,
+      region: getRegion(name),
+      centerId: null // 暂不支持单店查询
+    }));
 
     return {
       statusCode: 200,
@@ -170,17 +192,51 @@ exports.handler = async function(event, context) {
         today,
         curYear,
         curMonth,
-        availableYears,
+        curDay,
+        availableYears: years,
+        availableMonths: months.map(m => m.key),
         allShops,
-        monthlyRevenue,
-        todayRevenue,
+        dailyData,    // { 'YYYY-MM-DD': 万元 }
+        monthlyData,  // { 'YYYY-MM': 万元 }
+        yearlyData,   // { 'YYYY': 万元 }
+        // 汇总（集团总营收）
+        summary: {
+          today: dailyData[today] || 0,
+          currentMonth: monthlyData[`${curYear}-${String(curMonth).padStart(2,'0')}`] || 0,
+          currentYear: yearlyData[String(curYear)] || 0,
+          lastMonthKey: curMonth === 1
+            ? `${curYear-1}-12`
+            : `${curYear}-${String(curMonth-1).padStart(2,'0')}`,
+          lastYear: String(curYear - 1),
+        },
+        apiStatus: {
+          tokenOk: !!token,
+          monthsWithData: Object.entries(monthlyData).filter(([,v]) => v > 0).length,
+          daysWithData: Object.entries(dailyData).filter(([,v]) => v > 0).length,
+        }
       }),
     };
   } catch (err) {
+    console.error('API Error:', err.message);
     return {
-      statusCode: 500,
+      statusCode: 200,
       headers,
-      body: JSON.stringify({ success: false, error: err.message }),
+      body: JSON.stringify({
+        success: true,
+        generatedAt: new Date().toISOString(),
+        error: err.message,
+        // 返回空数据结构，前端降级显示
+        allShops: Object.keys(STORE_REGION_MAP).map(name => ({
+          name,
+          region: getRegion(name),
+          centerId: null
+        })),
+        dailyData: {},
+        monthlyData: {},
+        yearlyData: {},
+        summary: { today: 0, currentMonth: 0, currentYear: 0, lastMonthKey: '', lastYear: '' },
+        apiStatus: { tokenOk: false, monthsWithData: 0, daysWithData: 0 },
+      }),
     };
   }
 };
