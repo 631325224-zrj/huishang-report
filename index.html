@@ -10,27 +10,33 @@ body { font-family: "Microsoft YaHei","PingFang SC","SimSun",sans-serif; backgro
 .wrap { max-width: 1600px; margin: 0 auto; padding: 14px 16px 40px; }
 
 /* 顶栏 */
-.topbar { background: linear-gradient(135deg,#8B1A1A,#C0392B,#E74C3C); border-radius: 12px; padding: 16px 28px; color: #fff; display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; box-shadow: 0 4px 20px rgba(139,26,26,0.35); }
+.topbar { background: linear-gradient(135deg,#8B1A1A,#C0392B,#E74C3C); border-radius: 12px; padding: 16px 28px; color: #fff; display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; box-shadow: 0 4px 20px rgba(139,26,26,0.35); }
 .topbar h1 { font-size: 17px; font-weight: 700; letter-spacing: 2px; display: flex; align-items: center; gap: 10px; }
 .topbar .sub { font-size: 11px; opacity: 0.85; text-align: right; line-height: 1.6; }
 .topbar .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #27ae60; margin-right: 5px; animation: pulse 2s infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
+/* 提示条 */
+.notice-bar { background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 8px 16px; margin-bottom: 10px; font-size: 12px; color: #856404; display: flex; align-items: center; gap: 6px; }
+.notice-bar .icon { font-size: 14px; }
+#api-note { display: none; background: #e8f5e9; border: 1px solid #4caf50; border-radius: 8px; padding: 8px 16px; margin-bottom: 10px; font-size: 12px; color: #2e7d32; }
+
 /* 控制面板 */
-.ctrl-panel { background: #fff; border-radius: 12px; padding: 14px 20px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+.ctrl-panel { background: #fff; border-radius: 12px; padding: 12px 18px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
 .ctrl-group { display: flex; align-items: center; gap: 6px; }
 .ctrl-label { font-size: 12px; color: #888; font-weight: 500; white-space: nowrap; }
-select, input[type="date"], button { border: 1px solid #ddd; border-radius: 6px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none; background: #fff; cursor: pointer; transition: border-color 0.2s; }
-select:focus, input:focus, button:hover { border-color: #C0392B; }
+select, input[type="date"] { border: 1px solid #ddd; border-radius: 6px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none; background: #fff; cursor: pointer; transition: border-color 0.2s; }
+select:focus, input:focus { border-color: #C0392B; }
 select { min-width: 80px; }
-input[type="date"] { min-width: 120px; }
+input[type="date"] { min-width: 125px; }
+button { border: 1px solid #ddd; border-radius: 6px; padding: 6px 14px; font-size: 12px; font-family: inherit; outline: none; background: #fff; cursor: pointer; transition: all 0.2s; }
 .btn { padding: 6px 14px; font-weight: 600; }
 .btn-primary { background: #C0392B; color: #fff; border-color: #C0392B; }
 .btn-primary:hover { background: #a93226; }
 .btn-active { background: #C0392B !important; color: #fff !important; border-color: #C0392B !important; }
+.dim-btn { font-weight: 600; min-width: 60px; }
 .ctrl-divider { width: 1px; height: 24px; background: #eee; margin: 0 4px; }
 .ctrl-hint { font-size: 11px; color: #bbb; margin-left: auto; }
-.api-warn { font-size: 11px; color: #e67e22; background: #fef3e2; border-radius: 6px; padding: 6px 12px; border: 1px solid #fde3c0; }
 
 /* 汇总卡片 */
 .summary-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.06); margin-bottom: 12px; }
@@ -55,46 +61,39 @@ canvas { display: block; }
 .table-header { padding: 14px 20px; font-size: 14px; font-weight: 700; color: #333; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 8px; }
 .table-header::before { content: ''; width: 4px; height: 16px; background: #C0392B; border-radius: 2px; }
 .table-header .badge { font-size: 11px; background: #fdecea; color: #c0392b; padding: 2px 8px; border-radius: 10px; font-weight: 600; margin-left: 8px; }
-
+.table-header .meta { font-size: 11px; color: #999; font-weight: 400; margin-left: auto; }
+.table-scroll { max-height: 500px; overflow: auto; }
+.table-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.table-scroll::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
 table { width: 100%; border-collapse: collapse; font-size: 12px; }
 th, td { border-bottom: 1px solid #eee; padding: 7px 10px; text-align: center; white-space: nowrap; }
-th { background: #fafafa; font-weight: 600; color: #555; font-size: 11px; position: sticky; top: 0; }
+th { background: #fafafa; font-weight: 600; color: #555; font-size: 11px; position: sticky; top: 0; z-index: 1; }
 th.g1 { background: #fdecea; color: #c0392b; }
-
-.c-name { text-align: left !important; padding-left: 12px !important; min-width: 90px; }
+.c-name { text-align: left !important; padding-left: 12px !important; min-width: 100px; }
 .c-num { text-align: right !important; padding-right: 12px !important; font-variant-numeric: tabular-nums; }
 .c-pct { text-align: right !important; padding-right: 10px !important; }
 .c-up { color: #c0392b; font-weight: 600; }
 .c-down { color: #27ae60; font-weight: 600; }
 .c-na { color: #ccc; font-size: 11px; }
-.c-sub td { background: #fff8e8 !important; font-weight: 600; color: #8B4513; }
-.c-grand td { background: #fff3b0 !important; font-weight: 700; color: #333; font-size: 13px; }
+tr.subtot td { background: #fff8e8 !important; font-weight: 600; color: #8B4513; }
+tr.grandtot td { background: #fff3b0 !important; font-weight: 700; color: #333; font-size: 13px; }
 tr:hover td { background: #f8f9fa !important; }
-tr.subtot:hover td { background: #fff2cc !important; }
 tr.grandtot:hover td { background: #ffe680 !important; }
-
-/* 页脚 */
-.footer { text-align: center; font-size: 11px; color: #ccc; margin-top: 8px; }
-
-/* 加载遮罩 */
-#loading-mask { position: fixed; inset: 0; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; gap: 20px; }
-.spinner { width: 52px; height: 52px; border: 5px solid #f0f0f0; border-top-color: #C0392B; border-radius: 50%; animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.loading-text { font-size: 16px; color: #888; font-weight: 500; }
-.loading-sub { font-size: 12px; color: #bbb; }
 
 /* 空状态 */
 .empty-state { text-align: center; padding: 48px 20px; color: #bbb; }
 .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
 .empty-state p { font-size: 14px; margin: 4px 0; }
 
-/* API提示条 */
-#api-note { display: none; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 10px 18px; margin-bottom: 12px; font-size: 12px; color: #856404; }
+/* 加载遮罩 */
+#loading-mask { position: fixed; inset: 0; background: rgba(255,255,255,0.97); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; gap: 20px; }
+.spinner { width: 52px; height: 52px; border: 5px solid #f0f0f0; border-top-color: #C0392B; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 16px; color: #888; font-weight: 500; }
+.loading-sub { font-size: 12px; color: #bbb; }
 
-/* 滚动容器 */
-.table-scroll { max-height: 480px; overflow: auto; }
-.table-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-.table-scroll::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+/* 页脚 */
+.footer { text-align: center; font-size: 11px; color: #ccc; margin-top: 8px; }
 
 /* 响应式 */
 @media (max-width: 900px) {
@@ -125,27 +124,38 @@ tr.grandtot:hover td { background: #ffe680 !important; }
     </div>
   </div>
 
-  <!-- API提示 -->
+  <!-- 数据新鲜度提示 -->
   <div id="api-note"></div>
 
   <!-- 控制面板 -->
   <div class="ctrl-panel">
     <!-- 维度切换 -->
     <div class="ctrl-group">
-      <span class="ctrl-label">查看维度</span>
-      <button class="dim-btn btn btn-active" data-dim="month">月报</button>
-      <button class="dim-btn btn" data-dim="day">日报</button>
+      <span class="ctrl-label">维度</span>
+      <button class="dim-btn btn btn-active" data-dim="day">日报</button>
+      <button class="dim-btn btn" data-dim="month">月报</button>
       <button class="dim-btn btn" data-dim="year">年报</button>
     </div>
     <div class="ctrl-divider"></div>
 
+    <!-- 日报控件 -->
+    <div id="ctrl-day" class="ctrl-group">
+      <span class="ctrl-label">当期</span>
+      <input type="date" id="dateA">
+      <select id="selDayCompare">
+        <option value="yoy">同比</option>
+        <option value="dod">日对比</option>
+      </select>
+      <span id="lblDateB" class="ctrl-label">对比期</span>
+      <input type="date" id="dateB" style="display:none">
+    </div>
+
     <!-- 月报控件 -->
-    <div id="ctrl-month" class="ctrl-group">
+    <div id="ctrl-month" class="ctrl-group" style="display:none">
       <span class="ctrl-label">当期</span>
       <select id="selYearA"></select>
       <span class="ctrl-label">年</span>
       <select id="selMonthA"></select>
-      <span style="color:#ccc;margin:0 2px">vs</span>
       <select id="selCompare">
         <option value="yoy">同比</option>
         <option value="mom">环比</option>
@@ -155,23 +165,11 @@ tr.grandtot:hover td { background: #ffe680 !important; }
       <select id="selMonthB" style="display:none"></select>
     </div>
 
-    <!-- 日报控件 -->
-    <div id="ctrl-day" class="ctrl-group" style="display:none">
-      <span class="ctrl-label">当期</span>
-      <input type="date" id="dateA">
-      <span style="color:#ccc;margin:0 2px">vs</span>
-      <select id="selDayCompare">
-        <option value="yoy">同比</option>
-        <option value="dod">日对比</option>
-      </select>
-      <input type="date" id="dateB" style="display:none">
-    </div>
-
     <!-- 年报控件 -->
     <div id="ctrl-year" class="ctrl-group" style="display:none">
       <span class="ctrl-label">当期</span>
       <select id="selYearOnly"></select>
-      <span style="color:#ccc;margin:0 2px">vs</span>
+      <span class="ctrl-label">年 vs</span>
       <select id="selYearPrev"></select>
     </div>
     <div class="ctrl-divider"></div>
@@ -179,11 +177,17 @@ tr.grandtot:hover td { background: #ffe680 !important; }
     <!-- 区域筛选 -->
     <div class="ctrl-group">
       <span class="ctrl-label">区域</span>
-      <select id="selRegion"><option value="">全部</option></select>
+      <select id="selRegion"><option value="">全部区域</option></select>
+    </div>
+
+    <!-- 门店筛选 -->
+    <div class="ctrl-group">
+      <span class="ctrl-label">门店</span>
+      <select id="selShop"><option value="">全部门店</option></select>
     </div>
 
     <!-- 重置 -->
-    <button id="btnReset" class="btn btn-primary" style="margin-left:auto">重置筛选</button>
+    <button id="btnReset" class="btn btn-primary" style="margin-left:auto">重置</button>
     <div class="ctrl-hint" id="ctrl-hint"></div>
   </div>
 
@@ -214,24 +218,21 @@ tr.grandtot:hover td { background: #ffe680 !important; }
   <!-- 图表 -->
   <div class="charts-grid">
     <div class="chart-card">
-      <div class="chart-title">📊 当期 vs 对比期趋势</div>
-      <div class="chart-canvas-wrap">
-        <canvas id="chartBar"></canvas>
-      </div>
+      <div class="chart-title" id="chart-title-bar">📊 当期 vs 对比期趋势</div>
+      <div class="chart-canvas-wrap"><canvas id="chartBar"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">📈 月度营收走势（近12个月）</div>
-      <div class="chart-canvas-wrap">
-        <canvas id="chartLine"></canvas>
-      </div>
+      <div class="chart-title">📈 近12个月营收走势</div>
+      <div class="chart-canvas-wrap"><canvas id="chartLine"></canvas></div>
     </div>
   </div>
 
   <!-- 数据表格 -->
   <div class="table-card">
     <div class="table-header">
-      各门店经营数据
+      <span id="table-title">各门店经营数据</span>
       <span class="badge" id="table-badge"></span>
+      <span class="meta" id="table-meta"></span>
     </div>
     <div class="table-scroll">
       <table>
@@ -254,30 +255,31 @@ tr.grandtot:hover td { background: #ffe680 !important; }
   </div>
 
   <div class="footer">
-    徽商故里经营报表 · 收银系统直连 · 红色▲=增长 &nbsp;|&nbsp; 绿色▼=下降 &nbsp;|&nbsp; — = 无数据或系统未上线
+    徽商故里经营报表 · 收银系统直连 · 红色▲=增长 &nbsp;|&nbsp; 绿色▼=下降 &nbsp;|&nbsp; — = 无数据或系统未上线 &nbsp;|&nbsp; 数据延迟约30分钟
   </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
+'use strict';
+
 // ── 常量 ────────────────────────────────────────────────────────
 const MONTH_NAMES = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
-const REGIONS = ['北京','华北','合肥','皖北','浙沪','黄山','华南','其他'];
+const REGION_ORDER = ['北京','华北','合肥','皖北','浙沪','黄山','华南','其他'];
 
 // ── 全局状态 ────────────────────────────────────────────────────
 let DATA = null;
 let STATE = {
-  dim: 'month',        // 'month' | 'day' | 'year'
-  compare: 'yoy',      // 'yoy' | 'mom' | 'dod'
+  dim: 'day',       // 'month' | 'day' | 'year'
+  compare: 'yoy',   // 'yoy' | 'mom' | 'dod'
   // month
-  yearA: null, monthA: null,
-  yearB: null, monthB: null,
+  yearA: null, monthA: null, yearB: null, monthB: null,
   // day
   dateA: null, dateB: null,
   // year
   yearOnly: null, yearPrev: null,
   // filter
-  region: '',
+  region: '', shop: '',
 };
 let chartBar = null, chartLine = null;
 
@@ -286,31 +288,63 @@ async function loadData() {
   const el = document.getElementById('loading-status');
   el.textContent = '正在连接收银系统API…';
   const t0 = Date.now();
-  const res = await fetch('/.netlify/functions/revenue');
-  const json = await res.json();
-  const ms = Date.now() - t0;
-  el.textContent = '加载完成，耗时 ' + ms + 'ms';
-  return json;
+  try {
+    const res = await fetch('/.netlify/functions/revenue');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    const ms = Date.now() - t0;
+    el.textContent = '加载完成，耗时 ' + ms + 'ms';
+
+    // 显示 API 状态
+    if (json.apiStatus) {
+      const note = document.getElementById('api-note');
+      const { monthsWithData, daysWithData, tokenOk } = json.apiStatus;
+      if (!tokenOk) {
+        note.style.display = 'flex';
+        note.style.background = '#ffebee';
+        note.style.borderColor = '#ef5350';
+        note.style.color = '#c62828';
+        note.innerHTML = '<span class="icon">⚠️</span><span>API Token 获取失败，请检查收银系统凭证是否有效。</span>';
+      } else if (monthsWithData === 0 && daysWithData === 0) {
+        note.style.display = 'flex';
+        note.style.background = '#fff3cd';
+        note.style.borderColor = '#ffc107';
+        note.style.color = '#856404';
+        note.innerHTML = '<span class="icon">ℹ️</span><span>API 连接正常但当前查询范围内无营收数据（返回均为0）。请确认收银系统已上线营业，当前支持查询 <b>2025年6月之后</b> 的数据。</span>';
+      } else {
+        note.style.display = 'none';
+      }
+    }
+
+    return json;
+  } catch(e) {
+    el.textContent = '加载失败: ' + e.message;
+    return null;
+  }
 }
 
 // ── 初始化选择器 ────────────────────────────────────────────────
 function initSelectors() {
-  const { availableYears = [], availableMonths = [], curYear, curMonth, summary } = DATA;
+  const now = new Date();
+  const curYear = DATA?.curYear || now.getFullYear();
+  const curMonth = DATA?.curMonth || (now.getMonth() + 1);
+  const today = DATA?.today || now.toISOString().slice(0, 10);
 
   // 年份选项
-  const yearOpts = availableYears.slice().reverse().map(y => `<option value="${y}">${y}</option>`).join('');
+  const years = DATA?.availableYears || [curYear];
+  const yearOpts = years.slice().reverse().map(y => `<option value="${y}">${y}</option>`).join('');
   ['selYearA', 'selYearB', 'selYearOnly', 'selYearPrev'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = yearOpts;
   });
 
-  // 月份选项（1-12月）
+  // 月份选项
   const monthOpts = Array.from({length:12},(_,i) => `<option value="${i+1}">${MONTH_NAMES[i]}</option>`).join('');
   document.getElementById('selMonthA').innerHTML = monthOpts;
   document.getElementById('selMonthB').innerHTML = monthOpts;
 
   // 默认值
-  const latestYear = availableYears[availableYears.length-1] || curYear;
+  const latestYear = years[years.length - 1] || curYear;
   STATE.yearA = latestYear;
   STATE.yearB = latestYear - 1;
   STATE.yearOnly = latestYear;
@@ -325,28 +359,54 @@ function initSelectors() {
   document.getElementById('selMonthA').value = STATE.monthA;
   document.getElementById('selMonthB').value = STATE.monthB;
 
-  // 今日日期
-  const today = DATA.today || new Date().toISOString().slice(0,10);
+  // 日报默认今天
+  const maxDate = DATA?.dailyDates ? DATA.dailyDates[DATA.dailyDates.length - 1] : today;
   document.getElementById('dateA').value = today;
-  document.getElementById('dateA').max = today;
-  STATE.dateA = today;
+  document.getElementById('dateA').max = maxDate;
   // dateB 默认去年同期
   const d = new Date(today);
   d.setFullYear(d.getFullYear() - 1);
-  document.getElementById('dateB').value = d.toISOString().slice(0,10);
-  STATE.dateB = d.toISOString().slice(0,10);
+  document.getElementById('dateB').value = d.toISOString().slice(0, 10);
+  document.getElementById('dateB').max = maxDate;
+  STATE.dateA = today;
+  STATE.dateB = d.toISOString().slice(0, 10);
 
   // 区域选项
-  const usedRegions = [...new Set(REGIONS.filter(r => DATA.allShops.some(s => s.region === r)))];
+  const regions = [...new Set((DATA?.allShops || []).map(s => s.region))].filter(Boolean).sort((a,b) => {
+    const ai = REGION_ORDER.indexOf(a); const bi = REGION_ORDER.indexOf(b);
+    return (ai===-1?9:ai) - (bi===-1?9:bi);
+  });
   const regSel = document.getElementById('selRegion');
-  usedRegions.forEach(r => {
-    const o = document.createElement('option');
-    o.value = r; o.textContent = r + '区域';
-    regSel.appendChild(o);
+  regions.forEach(r => regSel.appendChild(new Option(r + '区域', r)));
+
+  // 门店选项（按区域分组）
+  const shopSel = document.getElementById('selShop');
+  let shopCount = 0;
+  REGION_ORDER.forEach(region => {
+    const shops = (DATA?.allShops || []).filter(s => s.region === region);
+    if (shops.length > 0) {
+      const group = document.createElement('optgroup');
+      group.label = region + '区域';
+      shops.forEach(s => {
+        group.appendChild(new Option(s.name, s.name));
+        shopCount++;
+      });
+      shopSel.appendChild(group);
+    }
   });
 
-  // 事件绑定
+  // 绑定事件
   bindEvents();
+
+  // 更新顶栏时间
+  const timeEl = document.getElementById('topbar-time');
+  if (timeEl) {
+    const gen = DATA?.generatedAt;
+    if (gen) {
+      const d2 = new Date(gen);
+      timeEl.textContent = '数据更新 ' + d2.toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+    }
+  }
 }
 
 function bindEvents() {
@@ -356,25 +416,33 @@ function bindEvents() {
       document.querySelectorAll('.dim-btn').forEach(b => b.classList.remove('btn-active'));
       btn.classList.add('btn-active');
       STATE.dim = btn.dataset.dim;
+      document.getElementById('ctrl-day').style.display   = STATE.dim === 'day'   ? '' : 'none';
       document.getElementById('ctrl-month').style.display = STATE.dim === 'month' ? '' : 'none';
-      document.getElementById('ctrl-day').style.display = STATE.dim === 'day' ? '' : 'none';
-      document.getElementById('ctrl-year').style.display = STATE.dim === 'year' ? '' : 'none';
+      document.getElementById('ctrl-year').style.display   = STATE.dim === 'year'  ? '' : 'none';
       updateBSelector();
       render();
     });
   });
 
-  // 对比方式切换（同比/环比）
+  // 对比方式
   document.getElementById('selCompare').addEventListener('change', e => {
     STATE.compare = e.target.value;
     updateBSelector();
     render();
   });
 
-  // 日对比切换
   document.getElementById('selDayCompare').addEventListener('change', e => {
     STATE.compare = e.target.value;
-    document.getElementById('dateB').style.display = STATE.compare === 'dod' ? '' : 'none';
+    const isDod = STATE.compare === 'dod';
+    document.getElementById('dateB').style.display    = isDod ? '' : 'none';
+    document.getElementById('lblDateB').style.display = isDod ? '' : 'none';
+    if (!isDod) {
+      // 同比：自动填去年同天
+      const d = new Date(STATE.dateA);
+      d.setFullYear(d.getFullYear() - 1);
+      document.getElementById('dateB').value = d.toISOString().slice(0, 10);
+      STATE.dateB = d.toISOString().slice(0, 10);
+    }
     render();
   });
 
@@ -385,71 +453,96 @@ function bindEvents() {
   document.getElementById('selMonthB').addEventListener('change', e => { STATE.monthB = parseInt(e.target.value); render(); });
   document.getElementById('selYearOnly').addEventListener('change', e => { STATE.yearOnly = parseInt(e.target.value); render(); });
   document.getElementById('selYearPrev').addEventListener('change', e => { STATE.yearPrev = parseInt(e.target.value); render(); });
-  document.getElementById('dateA').addEventListener('change', e => { STATE.dateA = e.target.value; render(); });
+
+  // 日选择器
+  document.getElementById('dateA').addEventListener('change', e => {
+    STATE.dateA = e.target.value;
+    // 同比自动更新 dateB
+    if (STATE.compare === 'yoy') {
+      const d = new Date(STATE.dateA);
+      d.setFullYear(d.getFullYear() - 1);
+      const prev = d.toISOString().slice(0, 10);
+      document.getElementById('dateB').value = prev;
+      STATE.dateB = prev;
+    }
+    render();
+  });
   document.getElementById('dateB').addEventListener('change', e => { STATE.dateB = e.target.value; render(); });
 
   // 区域筛选
-  document.getElementById('selRegion').addEventListener('change', e => { STATE.region = e.target.value; render(); });
+  document.getElementById('selRegion').addEventListener('change', e => {
+    STATE.region = e.target.value;
+    if (STATE.region) {
+      // 切换区域时，清除门店选择
+      STATE.shop = '';
+      document.getElementById('selShop').value = '';
+    }
+    render();
+  });
+
+  // 门店筛选
+  document.getElementById('selShop').addEventListener('change', e => {
+    STATE.shop = e.target.value;
+    if (STATE.shop) {
+      // 选了具体门店，区域自动匹配
+      const shopData = DATA?.allShops?.find(s => s.name === STATE.shop);
+      if (shopData) {
+        STATE.region = shopData.region;
+        document.getElementById('selRegion').value = STATE.region;
+      }
+    }
+    render();
+  });
 
   // 重置
   document.getElementById('btnReset').addEventListener('click', () => {
     STATE.region = '';
+    STATE.shop = '';
     document.getElementById('selRegion').value = '';
+    document.getElementById('selShop').value = '';
     render();
   });
 }
 
 function updateBSelector() {
-  const compare = STATE.compare;
-  const yoyDisplay = compare === 'yoy';
-  document.getElementById('selYearB').style.display = yoyDisplay ? '' : 'none';
-  document.getElementById('lblYearB').style.display = yoyDisplay ? '' : 'none';
-  document.getElementById('selMonthB').style.display = yoyDisplay ? '' : 'none';
-  document.getElementById('lblYearB').textContent = (yoyDisplay ? STATE.yearA - 1 : STATE.yearA) + '年';
-
-  if (compare === 'mom') {
-    // 环比：对比期 = 上月
-    const [y, m] = [STATE.yearA, STATE.monthA];
-    STATE.yearB = m === 1 ? y - 1 : y;
-    STATE.monthB = m === 1 ? 12 : m - 1;
+  if (STATE.dim !== 'month') return;
+  const isYoy = STATE.compare === 'yoy';
+  document.getElementById('selYearB').style.display = isYoy ? '' : 'none';
+  document.getElementById('lblYearB').style.display = isYoy ? '' : 'none';
+  document.getElementById('selMonthB').style.display = isYoy ? '' : 'none';
+  if (isYoy) {
+    document.getElementById('lblYearB').textContent = (STATE.yearA - 1) + '年';
+  } else {
+    // 环比
+    STATE.yearB = STATE.monthA === 1 ? STATE.yearA - 1 : STATE.yearA;
+    STATE.monthB = STATE.monthA === 1 ? 12 : STATE.monthA - 1;
     document.getElementById('selYearB').value = STATE.yearB;
     document.getElementById('selMonthB').value = STATE.monthB;
   }
 }
 
 // ── 获取营收 ────────────────────────────────────────────────────
-// 返回 key: 'YYYY-MM' | 'YYYY-MM-DD' | 'YYYY', val: 万元
-function getRevenueA(shopName) {
-  return getRevenue(shopName, true);
-}
-function getRevenueB(shopName) {
-  return getRevenue(shopName, false);
-}
-function getRevenue(shopName, isCurrent) {
-  const { monthlyData, dailyData, yearlyData, allShops } = DATA;
-  const shop = allShops.find(s => s.name === shopName);
-  if (!shop) return 0;
+function getRevenue(key, isCurrent) {
+  const { monthlyData, dailyData, yearlyData } = DATA;
 
   if (STATE.dim === 'month') {
-    let y, m;
-    if (isCurrent) { y = STATE.yearA; m = STATE.monthA; }
-    else { y = STATE.yearB; m = STATE.monthB; }
-    const key = `${y}-${String(m).padStart(2,'0')}`;
-    return monthlyData[key] || 0;
+    const y = isCurrent ? STATE.yearA : STATE.yearB;
+    const m = isCurrent ? STATE.monthA : STATE.monthB;
+    const k = `${y}-${String(m).padStart(2,'0')}`;
+    return monthlyData[k] || 0;
   }
   if (STATE.dim === 'day') {
-    let date;
-    if (isCurrent) date = STATE.dateA;
-    else date = STATE.dateB;
+    const date = isCurrent ? STATE.dateA : STATE.dateB;
     return dailyData[date] || 0;
   }
   if (STATE.dim === 'year') {
-    return isCurrent ? (yearlyData[String(STATE.yearOnly)] || 0) : (yearlyData[String(STATE.yearPrev)] || 0);
+    const y = isCurrent ? STATE.yearOnly : STATE.yearPrev;
+    return yearlyData[String(y)] || 0;
   }
   return 0;
 }
 
-// ── 计算对比值 ──────────────────────────────────────────────────
+// ── 计算变化 ───────────────────────────────────────────────────
 function calcChange(a, b) {
   if (!a && !b) return { diff: null, pct: null };
   if (!b) return { diff: a, pct: null };
@@ -467,64 +560,62 @@ function fmtPct(p) {
   return (p >= 0 ? '+' : '') + p.toFixed(1) + '%';
 }
 
-// ── 渲染 ────────────────────────────────────────────────────────
+// ── 渲染主函数 ─────────────────────────────────────────────────
 function render() {
   if (!DATA) return;
-  const { allShops, monthlyData, yearlyData } = DATA;
+  const { allShops, monthlyData } = DATA;
 
-  // 计算当期和对比期标签
-  let labelA = '', labelB = '';
+  // 标签
+  let labelA = '', labelB = '', compareLabel = '';
   if (STATE.dim === 'month') {
     labelA = `${STATE.yearA}年${MONTH_NAMES[STATE.monthA-1]}`;
     labelB = STATE.compare === 'yoy'
       ? `${STATE.yearB}年${MONTH_NAMES[STATE.monthB-1]}`
       : `${STATE.yearB}年${MONTH_NAMES[STATE.monthB-1]}`;
+    compareLabel = STATE.compare === 'yoy' ? '同比' : '环比';
   } else if (STATE.dim === 'day') {
     labelA = STATE.dateA;
-    labelB = STATE.compare === 'yoy'
-      ? `${parseInt(STATE.dateA.split('-')[0])-1}` + STATE.dateA.slice(4)
-      : STATE.dateB;
+    const yoyDate = (() => {
+      const d = new Date(STATE.dateA); d.setFullYear(d.getFullYear() - 1); return d.toISOString().slice(0,10);
+    })();
+    labelB = STATE.compare === 'yoy' ? yoyDate : STATE.dateB;
+    compareLabel = STATE.compare === 'yoy' ? '同比' : '日对比';
   } else {
     labelA = `${STATE.yearOnly}年`;
     labelB = `${STATE.yearPrev}年`;
+    compareLabel = '同比';
   }
 
-  // 表头
   document.getElementById('th-a').textContent = labelA;
   document.getElementById('th-b').textContent = labelB;
-  document.getElementById('table-badge').textContent = labelA + ' vs ' + labelB;
+  document.getElementById('table-badge').textContent = compareLabel;
   document.getElementById('sc-label-a').textContent = labelA;
   document.getElementById('sc-label-b').textContent = labelB;
 
   // 过滤门店
-  const shops = allShops.filter(s => !STATE.region || s.region === STATE.region);
-
-  // 计算各门店营收
-  const shopRevs = shops.map(s => {
-    const a = getRevenueA(s.name);
-    const b = getRevenueB(s.name);
-    return { ...s, revA: a, revB: b, ...calcChange(a, b) };
+  let shops = allShops.filter(s => {
+    if (STATE.region && s.region !== STATE.region) return false;
+    if (STATE.shop && s.name !== STATE.shop) return false;
+    return true;
   });
 
-  // 过滤有数据的门店（至少有一期有数据）
-  const visibleShops = shopRevs.filter(s => s.revA > 0 || s.revB > 0);
-  const displayShops = visibleShops.length > 0 ? visibleShops : shopRevs;
+  // 如果选中了单个门店，按单个门店处理
+  const singleShop = STATE.shop ? shops[0] : null;
 
-  // 总计
-  const totalA = displayShops.reduce((s, x) => s + x.revA, 0);
-  const totalB = displayShops.reduce((s, x) => s + x.revB, 0);
-  const totalChange = calcChange(totalA, totalB);
+  // 营收数据
+  const revA = getRevenue(null, true);
+  const revB = getRevenue(null, false);
+  const change = calcChange(revA, revB);
 
   // 汇总卡片
-  document.getElementById('sc-val-a').textContent = totalA > 0 ? totalA.toFixed(2) + '万' : '—';
-  document.getElementById('sc-val-b').textContent = totalB > 0 ? totalB.toFixed(2) + '万' : '—';
-  document.getElementById('sc-sub-a').textContent = '当期金额';
-  document.getElementById('sc-sub-b').textContent = '对比期金额';
+  document.getElementById('sc-val-a').textContent = revA > 0 ? revA.toFixed(2) + '万' : '—';
+  document.getElementById('sc-val-b').textContent = revB > 0 ? revB.toFixed(2) + '万' : '—';
+  document.getElementById('sc-val-a').className = 'val' + (revA > revB ? ' up' : revA < revB ? ' down' : '');
 
-  if (totalChange.diff !== null) {
-    const sign = totalChange.diff >= 0 ? '▲' : '▼';
-    document.getElementById('sc-diff').textContent = sign + Math.abs(totalChange.diff).toFixed(2) + '万';
-    document.getElementById('sc-diff').className = 'val ' + (totalChange.diff >= 0 ? 'up' : 'down');
+  if (change.diff !== null) {
+    const sign = change.diff >= 0 ? '▲' : '▼';
+    document.getElementById('sc-diff').textContent = sign + Math.abs(change.diff).toFixed(2) + '万';
+    document.getElementById('sc-diff').className = 'val ' + (change.diff >= 0 ? 'up' : 'down');
     document.getElementById('sc-diff-sub').textContent = '较对比期';
   } else {
     document.getElementById('sc-diff').textContent = '—';
@@ -532,12 +623,12 @@ function render() {
     document.getElementById('sc-diff-sub').textContent = '';
   }
 
-  if (totalChange.pct !== null) {
-    const sign = totalChange.pct >= 0 ? '▲' : '▼';
-    document.getElementById('sc-pct').textContent = sign + Math.abs(totalChange.pct).toFixed(1) + '%';
-    document.getElementById('sc-pct').className = 'val ' + (totalChange.pct >= 0 ? 'up' : 'down');
-    document.getElementById('sc-pct-sub').textContent = totalChange.pct >= 0 ? '同比上升' : '同比下降';
-    document.getElementById('sc-pct-sub').className = 'comp ' + (totalChange.pct >= 0 ? 'up' : 'down');
+  if (change.pct !== null) {
+    const sign = change.pct >= 0 ? '▲' : '▼';
+    document.getElementById('sc-pct').textContent = sign + Math.abs(change.pct).toFixed(1) + '%';
+    document.getElementById('sc-pct').className = 'val ' + (change.pct >= 0 ? 'up' : 'down');
+    document.getElementById('sc-pct-sub').textContent = compareLabel + (change.pct >= 0 ? '上升' : '下降');
+    document.getElementById('sc-pct-sub').className = 'comp ' + (change.pct >= 0 ? 'up' : 'down');
   } else {
     document.getElementById('sc-pct').textContent = '—';
     document.getElementById('sc-pct').className = 'val';
@@ -545,211 +636,182 @@ function render() {
     document.getElementById('sc-pct-sub').className = 'comp';
   }
 
+  // 表格标题
+  const tableTitle = STATE.shop ? STATE.shop
+    : STATE.region ? STATE.region + '区域'
+    : '全部门店';
+  document.getElementById('table-title').textContent = tableTitle + ' 经营数据';
+  document.getElementById('table-meta').textContent = `共 ${shops.length} 家门店`;
+
   // 渲染表格
-  renderTable(displayShops, labelA, labelB, STATE.region);
+  renderTable(shops, revA, revB, change);
 
   // 渲染图表
-  renderCharts(shopRevs, labelA, labelB, monthlyData, yearlyData);
-
-  // 提示
-  const hint = STATE.region ? `${STATE.region}区域 · ${displayShops.length}家门店` : `全部 ${displayShops.length} 家门店`;
-  document.getElementById('ctrl-hint').textContent = hint;
+  renderCharts(shops, revA, revB, labelA, labelB, compareLabel, monthlyData);
 }
 
-function renderTable(shops, labelA, labelB, region) {
+function renderTable(shops, revA, revB, change) {
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
 
   if (shops.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><div class="icon">📊</div><p>当前条件下无数据</p><p style="font-size:12px">请确认收银系统已上线并有营业数据</p></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="icon">📊</div><p>当前条件下无数据</p><p style="font-size:12px">请确认收银系统已上线并有营业数据</p></div></td></tr>';
     return;
   }
 
   // 按区域分组
   const grouped = {};
-  REGIONS.forEach(r => { grouped[r] = []; });
-  shops.forEach(s => {
-    if (grouped[s.region]) grouped[s.region].push(s);
-  });
+  REGION_ORDER.forEach(r => { grouped[r] = []; });
+  shops.forEach(s => grouped[s.region].push(s));
+
+  const fmt = (v) => {
+    if (!v && v !== 0) return '<span class="c-na">—</span>';
+    if (Math.abs(v) < 0.01) return '0.00';
+    return v.toFixed(2);
+  };
+  const clsUp = (v) => v === null ? '' : (v >= 0 ? 'c-up' : 'c-down');
+  const sign = (v) => v === null ? '' : (v >= 0 ? '▲' : '▼');
+  const abs = (v) => v === null ? '—' : Math.abs(v).toFixed(2);
+  const pctSign = (v) => v === null ? '—' : (v >= 0 ? '▲' : '▼');
+  const pctAbs = (v) => v === null ? '—' : Math.abs(v).toFixed(1) + '%';
 
   let grandA = 0, grandB = 0;
 
-  REGIONS.forEach(region => {
+  REGION_ORDER.forEach(region => {
     const list = grouped[region];
     if (!list || list.length === 0) return;
     let regA = 0, regB = 0;
 
-    // 区域行
     list.forEach((shop, idx) => {
-      regA += shop.revA; regB += shop.revB;
+      const sA = getRevenue(shop.name, true);
+      const sB = getRevenue(shop.name, false);
+      regA += sA; regB += sB;
+      grandA += sA; grandB += sB;
+      const ch = calcChange(sA, sB);
       const tr = document.createElement('tr');
-      const regionCell = idx === 0 ? `<td class="c-name" rowspan="${list.length}">${region}</td>` : '';
-      const clsUp = (v) => v === null ? '' : (v >= 0 ? 'c-up' : 'c-down');
-      const sign = (v) => v === null ? '' : (v >= 0 ? '▲' : '▼');
-      const abs = (v) => v === null ? '—' : Math.abs(v).toFixed(2);
-      const pctSign = (v) => v === null ? '—' : (v >= 0 ? '▲' : '▼');
-      const pctAbs = (v) => v === null ? '—' : Math.abs(v).toFixed(1) + '%';
-
       tr.innerHTML = `
-        ${regionCell}
+        ${idx === 0 ? `<td class="c-name" rowspan="${list.length}">${region}</td>` : ''}
         <td class="c-name">${shop.name}</td>
-        <td class="c-num">${shop.revA > 0 ? fmt(shop.revA) : '<span class="c-na">—</span>'}</td>
-        <td class="c-num">${shop.revB > 0 ? fmt(shop.revB) : '<span class="c-na">—</span>'}</td>
-        <td class="c-num ${clsUp(shop.diff)}">${shop.diff !== null ? sign(shop.diff) + abs(shop.diff) : '<span class="c-na">—</span>'}</td>
-        <td class="c-pct ${clsUp(shop.pct)}">${shop.pct !== null ? pctSign(shop.pct) + pctAbs(shop.pct) : '<span class="c-na">—</span>'}</td>
-      `;
+        <td class="c-num">${fmt(sA)}</td>
+        <td class="c-num">${fmt(sB)}</td>
+        <td class="c-num ${clsUp(ch.diff)}">${ch.diff !== null ? sign(ch.diff) + abs(ch.diff) : '<span class="c-na">—</span>'}</td>
+        <td class="c-pct ${clsUp(ch.pct)}">${ch.pct !== null ? pctSign(ch.pct) + pctAbs(ch.pct) : '<span class="c-na">—</span>'}</td>`;
       tbody.appendChild(tr);
     });
 
-    // 区域小计
-    const rChange = calcChange(regA, regB);
-    const rCls = rChange.diff === null ? '' : (rChange.diff >= 0 ? 'c-up' : 'c-down');
-    const rSign = rChange.diff === null ? '' : (rChange.diff >= 0 ? '▲' : '▼');
-    const subTr = document.createElement('tr');
-    subTr.className = 'subtot';
-    subTr.innerHTML = `
-      <td class="c-name c-sub" colspan="2">【${region}合计】</td>
-      <td class="c-num c-sub">${regA > 0 ? regA.toFixed(2) : '—'}</td>
-      <td class="c-num c-sub">${regB > 0 ? regB.toFixed(2) : '—'}</td>
-      <td class="c-num c-sub ${rCls}">${rChange.diff !== null ? rSign + Math.abs(rChange.diff).toFixed(2) : '—'}</td>
-      <td class="c-pct c-sub ${rCls}">${rChange.pct !== null ? (rChange.pct >= 0 ? '▲' : '▼') + Math.abs(rChange.pct).toFixed(1) + '%' : '—'}</td>
-    `;
-    tbody.appendChild(subTr);
-
-    grandA += regA; grandB += regB;
+    // 小计行
+    const regCh = calcChange(regA, regB);
+    const subtot = document.createElement('tr');
+    subtot.className = 'subtot';
+    subtot.innerHTML = `
+      <td class="c-name" colspan="2">${region} 合计</td>
+      <td class="c-num">${fmt(regA)}</td>
+      <td class="c-num">${fmt(regB)}</td>
+      <td class="c-num ${clsUp(regCh.diff)}">${regCh.diff !== null ? sign(regCh.diff) + abs(regCh.diff) : '<span class="c-na">—</span>'}</td>
+      <td class="c-pct ${clsUp(regCh.pct)}">${regCh.pct !== null ? pctSign(regCh.pct) + pctAbs(regCh.pct) : '<span class="c-na">—</span>'}</td>`;
+    tbody.appendChild(subtot);
   });
 
-  // 总合计
-  const gChange = calcChange(grandA, grandB);
-  const gCls = gChange.diff === null ? '' : (gChange.diff >= 0 ? 'c-up' : 'c-down');
-  const gSign = gChange.diff === null ? '' : (gChange.diff >= 0 ? '▲' : '▼');
-  const grandTr = document.createElement('tr');
-  grandTr.className = 'grandtot';
-  grandTr.innerHTML = `
-    <td colspan="2" class="c-grand">【集团总合计】</td>
-    <td class="c-num c-grand">${grandA > 0 ? grandA.toFixed(2) : '—'}</td>
-    <td class="c-num c-grand">${grandB > 0 ? grandB.toFixed(2) : '—'}</td>
-    <td class="c-num c-grand ${gCls}">${gChange.diff !== null ? gSign + Math.abs(gChange.diff).toFixed(2) : '—'}</td>
-    <td class="c-pct c-grand ${gCls}">${gChange.pct !== null ? (gChange.pct >= 0 ? '▲' : '▼') + Math.abs(gChange.pct).toFixed(1) + '%' : '—'}</td>
-  `;
-  tbody.appendChild(grandTr);
+  // 总计行
+  const grandCh = calcChange(grandA, grandB);
+  const grandtot = document.createElement('tr');
+  grandtot.className = 'grandtot';
+  grandtot.innerHTML = `
+    <td class="c-name" colspan="2">全部合计</td>
+    <td class="c-num">${fmt(grandA)}</td>
+    <td class="c-num">${fmt(grandB)}</td>
+    <td class="c-num ${clsUp(grandCh.diff)}">${grandCh.diff !== null ? sign(grandCh.diff) + abs(grandCh.diff) : '<span class="c-na">—</span>'}</td>
+    <td class="c-pct ${clsUp(grandCh.pct)}">${grandCh.pct !== null ? pctSign(grandCh.pct) + pctAbs(grandCh.pct) : '<span class="c-na">—</span>'}</td>`;
+  tbody.appendChild(grandtot);
 }
 
-function renderCharts(shops, labelA, labelB, monthlyData, yearlyData) {
-  const ctxBar = document.getElementById('chartBar').getContext('2d');
-  const ctxLine = document.getElementById('chartLine').getContext('2d');
+function renderCharts(shops, revA, revB, labelA, labelB, compareLabel, monthlyData) {
+  const chartBarEl = document.getElementById('chartBar').getContext('2d');
+  const chartLineEl = document.getElementById('chartLine').getContext('2d');
 
-  // 图1: 当期vs对比期（按区域汇总柱状图）
-  const regionData = {};
-  REGIONS.forEach(r => { regionData[r] = { a: 0, b: 0 }; });
-  shops.forEach(s => {
-    if (regionData[s.region]) {
-      regionData[s.region].a += s.revA;
-      regionData[s.region].b += s.revB;
-    }
-  });
-
-  const barLabels = Object.keys(regionData).filter(r => regionData[r].a > 0 || regionData[r].b > 0);
-  const barA = barLabels.map(r => regionData[r].a);
-  const barB = barLabels.map(r => regionData[r].b);
-
+  // ── 柱状图：当期 vs 对比期 ─────────────────────────────────
   if (chartBar) chartBar.destroy();
-  chartBar = new Chart(ctxBar, {
+  chartBar = new Chart(chartBarEl, {
     type: 'bar',
     data: {
-      labels: barLabels,
-      datasets: [
-        { label: labelA, data: barA, backgroundColor: 'rgba(192,57,43,0.8)', borderRadius: 4, borderSkipped: false },
-        { label: labelB, data: barB, backgroundColor: 'rgba(52,73,94,0.6)', borderRadius: 4, borderSkipped: false },
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'top', labels: { font: { size: 11 } } },
-        tooltip: {
-          callbacks: {
-            label: ctx => `${ctx.dataset.label}: ${ctx.raw.toFixed(2)}万元`
-          }
-        }
-      },
-      scales: {
-        y: { beginAtZero: true, ticks: { callback: v => v + '万', font: { size: 10 } } },
-        x: { ticks: { font: { size: 10 } } }
-      }
-    }
-  });
-
-  // 图2: 月度走势（近12个月）
-  const sortedMonths = Object.keys(monthlyData).sort().slice(-12);
-  const lineLabels = sortedMonths.map(k => {
-    const [y, m] = k.split('-');
-    return `${y}年${MONTH_NAMES[parseInt(m)-1]}`;
-  });
-  const lineValues = sortedMonths.map(k => monthlyData[k]);
-
-  if (chartLine) chartLine.destroy();
-  chartLine = new Chart(ctxLine, {
-    type: 'line',
-    data: {
-      labels: lineLabels,
+      labels: [labelA, labelB],
       datasets: [{
-        label: '月度营收(万元)',
-        data: lineValues,
-        borderColor: '#C0392B',
-        backgroundColor: 'rgba(192,57,43,0.1)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 4,
-        pointBackgroundColor: '#C0392B',
+        label: '营收（万元）',
+        data: [revA || 0, revB || 0],
+        backgroundColor: [revA >= revB ? 'rgba(192,57,43,0.85)' : 'rgba(39,174,96,0.85)', 'rgba(100,100,130,0.5)'],
+        borderColor: [revA >= revB ? '#c0392b' : '#27ae60', '#646482'],
+        borderWidth: 1,
+        borderRadius: 6,
       }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => `${ctx.raw.toFixed(2)}万元`
-          }
-        }
+        tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y.toFixed(2)} 万元` } }
       },
       scales: {
-        y: { beginAtZero: true, ticks: { callback: v => v + '万', font: { size: 10 } } },
-        x: { ticks: { font: { size: 10 }, maxRotation: 30 } }
+        y: { beginAtZero: true, title: { display: true, text: '万元' }, grid: { color: '#f0f0f0' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+
+  // ── 折线图：近12个月趋势 ─────────────────────────────────
+  if (chartLine) chartLine.destroy();
+
+  // 取近12个月数据
+  const entries = Object.entries(monthlyData || {}).sort((a, b) => a[0].localeCompare(b[0])).slice(-12);
+  const labels12 = entries.map(([k]) => {
+    const [y, m] = k.split('-');
+    return `${y}年${m}月`;
+  });
+  const values12 = entries.map(([, v]) => v || 0);
+
+  chartLine = new Chart(chartLineEl, {
+    type: 'line',
+    data: {
+      labels: labels12,
+      datasets: [{
+        label: '月营收（万元）',
+        data: values12,
+        borderColor: '#c0392b',
+        backgroundColor: 'rgba(192,57,43,0.1)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.3,
+        pointRadius: 4,
+        pointBackgroundColor: '#c0392b',
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y.toFixed(2)} 万元` } }
+      },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: '万元' }, grid: { color: '#f0f0f0' } },
+        x: { grid: { display: false } }
       }
     }
   });
 }
 
 // ── 启动 ────────────────────────────────────────────────────────
-(async () => {
+(async function main() {
   try {
     DATA = await loadData();
-    document.getElementById('loading-mask').style.display = 'none';
-
-    // 更新时间
-    const genAt = new Date(DATA.generatedAt);
-    const fmt = `${genAt.getFullYear()}-${String(genAt.getMonth()+1).padStart(2,'0')}-${String(genAt.getDate()).padStart(2,'0')} ${String(genAt.getHours()).padStart(2,'0')}:${String(genAt.getMinutes()).padStart(2,'0')}`;
-    document.getElementById('topbar-time').textContent = '更新于 ' + fmt;
-
-    // API状态提示
-    const noteEl = document.getElementById('api-note');
-    if (!DATA.apiStatus?.tokenOk) {
-      noteEl.style.display = 'block';
-      noteEl.innerHTML = '⚠️ 收银系统连接异常：' + (DATA.error || '无法获取访问令牌，请检查API凭证是否有效');
-    } else if (DATA.apiStatus?.monthsWithData === 0) {
-      noteEl.style.display = 'block';
-      noteEl.innerHTML = 'ℹ️ 当前查询范围内暂无营收数据（系统于2025年6月上线）。请选择2025年6月之后的日期进行查看。';
+    if (!DATA) {
+      document.getElementById('loading-status').textContent = '数据加载失败，请刷新重试';
+      return;
     }
-
+    document.getElementById('loading-mask').style.display = 'none';
     initSelectors();
     render();
   } catch(e) {
-    document.getElementById('loading-mask').style.display = 'none';
-    const noteEl = document.getElementById('api-note');
-    noteEl.style.display = 'block';
-    noteEl.innerHTML = '⚠️ 数据加载失败：' + e.message + ' — 请刷新页面重试';
+    console.error(e);
+    document.getElementById('loading-status').textContent = '初始化失败: ' + e.message;
   }
 })();
 </script>
