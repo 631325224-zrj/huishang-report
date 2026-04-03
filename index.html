@@ -297,7 +297,7 @@ async function getToken() {
   return json.access_token || null;
 }
 
-// 门店营收数据缓存
+// 门店营收数据缓存 - 键为 "shopId_日期" 避免多门店数据覆盖
 const shopRevenueCache = {};
 
 async function queryRevenue(token, settleDate, dateType, centerId, shopId) {
@@ -309,9 +309,10 @@ async function queryRevenue(token, settleDate, dateType, centerId, shopId) {
   const json = await res.json();
   // 纯收金额 = income.incomeTotal
   const income = parseFloat(json?.data?.List?.income?.incomeTotal) || 0;
-  // 缓存门店数据
-  if (!shopRevenueCache[centerId]) shopRevenueCache[centerId] = {};
-  shopRevenueCache[centerId][settleDate] = { income, code: json.code||0 };
+  // 缓存门店数据 - 使用 shopId + 日期 作为键，避免多门店共用 centerId 导致覆盖
+  const cacheKey = `${shopId}_${settleDate}`;
+  if (!shopRevenueCache[cacheKey]) shopRevenueCache[cacheKey] = { income, code: json.code||0 };
+  else { shopRevenueCache[cacheKey].income = income; shopRevenueCache[cacheKey].code = json.code||0; }
   return {settleDate, dateType, centerId, shopId, income, code: json.code||0};
 }
 
