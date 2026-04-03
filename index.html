@@ -372,10 +372,16 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
       <b>完整数据：</b>${JSON.stringify(bd, null, 2).slice(0, 600)}
     `;
   }
-  
-  // 提取纯收金额数据 - 使用 income 字段（纯收金额）
+
+  // 提取纯收金额数据 - 优先使用 incomeTotal 字段
   let income = 0;
-  if (json?.data?.List?.businessData?.income !== undefined) {
+  if (json?.data?.List?.businessData?.incomeTotal !== undefined) {
+    income = parseFloat(json.data.List.businessData.incomeTotal) || 0;
+  } else if (json?.data?.businessData?.incomeTotal !== undefined) {
+    income = parseFloat(json.data.businessData.incomeTotal) || 0;
+  } else if (json?.data?.incomeTotal !== undefined) {
+    income = parseFloat(json.data.incomeTotal) || 0;
+  } else if (json?.data?.List?.businessData?.income !== undefined) {
     income = parseFloat(json.data.List.businessData.income) || 0;
   } else if (json?.data?.businessData?.income !== undefined) {
     income = parseFloat(json.data.businessData.income) || 0;
