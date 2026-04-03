@@ -44,7 +44,10 @@ button { border: 1px solid #ddd; border-radius: 6px; padding: 6px 14px; font-siz
 .scard .comp { font-size: 11px; margin-top: 4px; font-weight: 600; }
 .up { color: #c0392b; }
 .down { color: #27ae60; }
-.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.charts-toggle { margin-bottom: 8px; text-align: right; }
+#btnToggleCharts { font-size: 11px; padding: 4px 12px; }
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; transition: max-height 0.3s ease, opacity 0.3s ease; max-height: 400px; overflow: hidden; }
+.charts-grid.collapsed { max-height: 0; opacity: 0; margin-bottom: 0; }
 .chart-card { background: #fff; border-radius: 12px; padding: 16px 18px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
 .chart-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #eee; }
 .table-card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.06); margin-bottom: 12px; }
@@ -193,13 +196,16 @@ canvas { display: block; }
     </div>
   </div>
 
-  <div class="charts-grid">
+  <div class="charts-toggle">
+    <button class="btn btn-primary" id="btnToggleCharts" onclick="toggleCharts()">📊 收起趋势图</button>
+  </div>
+  <div class="charts-grid" id="charts-container">
     <div class="chart-card">
       <div class="chart-title">📊 当期 vs 对比期趋势</div>
       <div style="height:220px"><canvas id="chartBar"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">📈 近12个月营收走势</div>
+      <div class="chart-title">📈 近12个月纯收金额走势</div>
       <div style="height:220px"><canvas id="chartLine"></canvas></div>
     </div>
   </div>
@@ -218,7 +224,7 @@ canvas { display: block; }
         <thead>
           <tr>
             <th colspan="2" rowspan="2">区域 / 门店</th>
-            <th class="g1" colspan="2">营收（万元）</th>
+            <th class="g1" colspan="2">纯收金额（元）</th>
             <th class="g1" colspan="2">变化</th>
           </tr>
           <tr>
@@ -299,6 +305,7 @@ let STATE = {
   region:'', shop:'',
 };
 let chartBar=null, chartLine=null;
+let chartsCollapsed = false;
 let token = null;
 
 // 缓存
@@ -353,9 +360,16 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
     console.log(`API [${dateType}] ${settleDate}:`, JSON.stringify(json, null, 2).slice(0, 500));
   }
   
-  // 提取营收数据 - 使用 businessData.orig 字段
+  // 提取纯收金额数据 - 使用 income 字段（纯收金额）
   let income = 0;
-  if (json?.data?.List?.businessData?.orig !== undefined) {
+  if (json?.data?.List?.businessData?.income !== undefined) {
+    income = parseFloat(json.data.List.businessData.income) || 0;
+  } else if (json?.data?.businessData?.income !== undefined) {
+    income = parseFloat(json.data.businessData.income) || 0;
+  } else if (json?.data?.income !== undefined) {
+    income = parseFloat(json.data.income) || 0;
+  } else if (json?.data?.List?.businessData?.orig !== undefined) {
+    // 备用：营收字段
     income = parseFloat(json.data.List.businessData.orig) || 0;
   } else if (json?.data?.businessData?.orig !== undefined) {
     income = parseFloat(json.data.businessData.orig) || 0;
@@ -456,10 +470,10 @@ async function loadAllData() {
   
   dayResults.forEach(r => {
     if (r?.income && r?.settleDate && r?.shopId) {
-      dailyData[r.settleDate] = (dailyData[r.settleDate] || 0) + r.income / 10000;
+      dailyData[r.settleDate] = (dailyData[r.settleDate] || 0) + r.income;
       // 保存各门店独立数据（使用 shopId 匹配）
       if (shopDailyData[r.shopId]) {
-        shopDailyData[r.shopId][r.settleDate] = r.income / 10000;
+        shopDailyData[r.shopId][r.settleDate] = r.income;
       }
     }
   });
@@ -490,9 +504,9 @@ async function loadAllData() {
       monthResults.forEach(r => {
         if (r?.income && r?.settleDate && r?.shopId) {
           const key = r.settleDate.slice(0, 7);
-          monthlyData[key] = (monthlyData[key] || 0) + r.income / 10000;
+          monthlyData[key] = (monthlyData[key] || 0) + r.income;
           if (shopMonthlyData[r.shopId]) {
-            shopMonthlyData[r.shopId][key] = r.income / 10000;
+            shopMonthlyData[r.shopId][key] = r.income;
           }
         }
       });
@@ -509,9 +523,9 @@ async function loadAllData() {
       yearResults.forEach(r => {
         if (r?.income && r?.settleDate && r?.shopId) {
           const key = r.settleDate.slice(0, 4);
-          yearlyData[key] = (yearlyData[key] || 0) + r.income / 10000;
+          yearlyData[key] = (yearlyData[key] || 0) + r.income;
           if (shopYearlyData[r.shopId]) {
-            shopYearlyData[r.shopId][key] = r.income / 10000;
+            shopYearlyData[r.shopId][key] = r.income;
           }
         }
       });
@@ -557,7 +571,8 @@ async function loadAllData() {
 }
 
 // ════════ 工具函数 ════════
-const fmt = v => (!v && v !== 0) ? '—' : (Math.abs(v) < 0.01 ? '0.00' : v.toFixed(2));
+// 金额格式化：元为单位，保留两位小数
+const fmt = v => (!v && v !== 0) ? '—' : v.toFixed(2);
 const clsUp = v => v === null ? '' : (v >= 0 ? 'c-up' : 'c-down');
 const sign  = v => v === null ? '' : (v >= 0 ? '▲' : '▼');
 const calcChange = (a, b) => {
@@ -770,11 +785,11 @@ function renderSummary() {
     labelA = `${STATE.yearOnly}年`; labelB = `${STATE.yearPrev}年`;
   }
 
-  document.getElementById('sc-label-a').textContent = labelA + ' 营收';
+  document.getElementById('sc-label-a').textContent = labelA + ' 纯收金额';
   document.getElementById('sc-val-a').textContent = fmt(revA);
-  document.getElementById('sc-sub-a').textContent = '收银系统实时数据';
+  document.getElementById('sc-sub-a').textContent = '收银系统实时数据 · 单位：元';
 
-  document.getElementById('sc-label-b').textContent = labelB + ' 营收';
+  document.getElementById('sc-label-b').textContent = labelB + ' 纯收金额';
   document.getElementById('sc-val-b').textContent = fmt(revB);
   const compType = STATE.compare === 'yoy' ? '同比' : (STATE.dim === 'day' ? '日对比' : '环比');
   document.getElementById('sc-sub-b').textContent = compType;
@@ -787,6 +802,20 @@ function renderSummary() {
   pctEl.className = 'val ' + (ch.pct !== null ? (ch.pct >= 0 ? 'up' : 'down') : '');
 
   document.getElementById('sc-pct-sub').textContent = compType + (ch.diff !== null ? (ch.diff >= 0 ? ' 增加' : ' 减少') : '');
+}
+
+// ════════ 折叠趋势图 ════════
+function toggleCharts() {
+  chartsCollapsed = !chartsCollapsed;
+  const container = document.getElementById('charts-container');
+  const btn = document.getElementById('btnToggleCharts');
+  if (chartsCollapsed) {
+    container.classList.add('collapsed');
+    btn.textContent = '📈 展开趋势图';
+  } else {
+    container.classList.remove('collapsed');
+    btn.textContent = '📊 收起趋势图';
+  }
 }
 
 // ════════ 渲染图表 ════════
@@ -815,7 +844,7 @@ function renderCharts() {
     data: {
       labels: [labelA, labelB],
       datasets: [{
-        label: '营收（万元）',
+        label: '纯收金额（元）',
         data: [revA || 0, revB || 0],
         backgroundColor: [revA >= revB ? 'rgba(192,57,43,0.85)' : 'rgba(39,174,96,0.85)', 'rgba(100,100,130,0.5)'],
         borderColor: [revA >= revB ? '#c0392b' : '#27ae60', '#646482'],
@@ -824,8 +853,8 @@ function renderCharts() {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y.toFixed(2)} 万元` } } },
-      scales: { y: { beginAtZero: true, title: { display: true, text: '万元' }, grid: { color: '#f0f0f0' } }, x: { grid: { display: false } } }
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y.toFixed(2)} 元` } } },
+      scales: { y: { beginAtZero: true, title: { display: true, text: '元' }, grid: { color: '#f0f0f0' } }, x: { grid: { display: false } } }
     }
   });
 
@@ -840,7 +869,7 @@ function renderCharts() {
     data: {
       labels: labels12,
       datasets: [{
-        label: '月营收（万元）',
+        label: '月纯收金额（元）',
         data: values12,
         borderColor: '#c0392b', backgroundColor: 'rgba(192,57,43,0.1)',
         borderWidth: 2, fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#c0392b'
@@ -848,8 +877,8 @@ function renderCharts() {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y.toFixed(2)} 万元` } } },
-      scales: { y: { beginAtZero: true, title: { display: true, text: '万元' }, grid: { color: '#f0f0f0' } }, x: { grid: { display: false } } }
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y.toFixed(2)} 元` } } },
+      scales: { y: { beginAtZero: true, title: { display: true, text: '元' }, grid: { color: '#f0f0f0' } }, x: { grid: { display: false } } }
     }
   });
 }
@@ -1016,26 +1045,70 @@ function exportData() {
   csv += `徽商故里经营数据报表\n`;
   csv += `对比维度: ${compareLabel}\n`;
   csv += `数据范围: ${title}\n`;
+  csv += `单位: 元\n`;
   csv += `生成时间: ${new Date().toLocaleString('zh-CN')}\n\n`;
   
-  csv += '区域,门店,' + labelA + '营收(万元),' + labelB + '营收(万元),增减额(万元),增减幅(%)\n';
+  // 表格数据：区域 + 门店 + 当期 + 对比期 + 增减额 + 增减幅
+  csv += `区域,门店,${labelA}纯收金额,${labelB}纯收金额,增减额,增减幅\n`;
   
-  const revA = getSummaryRevenue(true);
-  const revB = getSummaryRevenue(false);
-  const ch = calcChange(revA, revB);
-  
-  csv += `总部,汇总,${fmt(revA)},${fmt(revB)},`;
-  csv += ch.diff !== null ? `${ch.diff >= 0 ? '+' : ''}${ch.diff.toFixed(2)},` : ',';
-  csv += ch.pct !== null ? `${ch.pct >= 0 ? '+' : ''}${ch.pct.toFixed(1)}` : '';
-  csv += '\n';
-  
-  const monthEntries = Object.entries(DATA.monthlyData || {}).sort((a, b) => a[0].localeCompare(b[0]));
-  csv += '\n近12个月月营收走势\n';
-  csv += '月份,营收(万元)\n';
-  monthEntries.slice(-12).forEach(([k, v]) => {
-    const [y, m] = k.split('-');
-    csv += `${y}年${m}月,${fmt(v)}\n`;
+  // 获取当前筛选的门店列表
+  let shops = ALL_SHOPS.filter(s => {
+    if (STATE.region && s.region !== STATE.region) return false;
+    if (STATE.shop && s.name !== STATE.shop) return false;
+    return true;
   });
+  
+  // 按区域分组
+  const groupedByRegion = {};
+  shops.forEach(shop => {
+    const region = shop.region || '其他';
+    if (!groupedByRegion[region]) groupedByRegion[region] = [];
+    groupedByRegion[region].push(shop);
+  });
+  
+  const regionOrder = ['北京', '华北', '合肥', '皖北', '浙沪', '黄山', '华南'];
+  const sortedRegions = Object.keys(groupedByRegion).sort((a, b) => {
+    const ai = regionOrder.indexOf(a), bi = regionOrder.indexOf(b);
+    return (ai === -1 ? 9 : ai) - (bi === -1 ? 9 : bi);
+  });
+  
+  let grandTotalA = 0, grandTotalB = 0;
+  
+  sortedRegions.forEach(region => {
+    const regionShops = groupedByRegion[region];
+    let regionTotalA = 0, regionTotalB = 0;
+    
+    regionShops.forEach(shop => {
+      const revA = getSummaryRevenue(true, shop.centerId);
+      const revB = getSummaryRevenue(false, shop.centerId);
+      const ch = calcChange(revA, revB);
+      regionTotalA += revA;
+      regionTotalB += revB;
+      grandTotalA += revA;
+      grandTotalB += revB;
+      
+      csv += `${region},${shop.name},${revA.toFixed(2)},${revB.toFixed(2)},`;
+      csv += ch.diff !== null ? `${ch.diff >= 0 ? '+' : ''}${ch.diff.toFixed(2)},` : ',';
+      csv += ch.pct !== null ? `${ch.pct >= 0 ? '+' : ''}${ch.pct.toFixed(1)}%` : '';
+      csv += '\n';
+    });
+    
+    // 区域汇总行
+    const regionCh = calcChange(regionTotalA, regionTotalB);
+    csv += `${region}区域汇总,,,,,\n`;
+    csv += `,本区域小计,${regionTotalA.toFixed(2)},${regionTotalB.toFixed(2)},`;
+    csv += regionCh.diff !== null ? `${regionCh.diff >= 0 ? '+' : ''}${regionCh.diff.toFixed(2)},` : ',';
+    csv += regionCh.pct !== null ? `${regionCh.pct >= 0 ? '+' : ''}${regionCh.pct.toFixed(1)}%` : '';
+    csv += '\n';
+  });
+  
+  // 总部汇总行
+  const grandCh = calcChange(grandTotalA, grandTotalB);
+  csv += `总部汇总,,,,,\n`;
+  csv += `,全部门店合计,${grandTotalA.toFixed(2)},${grandTotalB.toFixed(2)},`;
+  csv += grandCh.diff !== null ? `${grandCh.diff >= 0 ? '+' : ''}${grandCh.diff.toFixed(2)},` : ',';
+  csv += grandCh.pct !== null ? `${grandCh.pct >= 0 ? '+' : ''}${grandCh.pct.toFixed(1)}%` : '';
+  csv += '\n';
   
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
