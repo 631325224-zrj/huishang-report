@@ -231,7 +231,7 @@ canvas { display: block; }
       <table>
         <thead>
           <tr>
-            <th class="c-name" colspan="2" onclick="sortTable('name')">区域 / 门店<span class="sort-icon" id="sort-name">⇅</span></th>
+            <th class="c-name" onclick="sortTable('name')">门店<span class="sort-icon" id="sort-name">⇅</span></th>
             <th class="c-num" onclick="sortTable('revA')" title="点击排序">当期<span class="sort-icon" id="sort-revA">⇅</span></th>
             <th class="c-num" onclick="sortTable('revB')" title="点击排序">对比期<span class="sort-icon" id="sort-revB">⇅</span></th>
             <th class="c-num" onclick="sortTable('diff')" title="点击排序">增减额<span class="sort-icon" id="sort-diff">⇅</span></th>
@@ -956,7 +956,7 @@ function renderTable(shops) {
     const grandtot = document.createElement('tr');
     grandtot.className = 'grandtot';
     grandtot.innerHTML = `
-      <td class="c-name" colspan="2">🏪 ${shop.name}</td>
+      <td class="c-name">🏪 ${shop.name}</td>
       <td class="c-num">${fmt(revA)}</td>
       <td class="c-num">${fmt(revB)}</td>
       <td class="c-num ${clsUp(ch.diff)}">${ch.diff !== null ? sign(ch.diff) + Math.abs(ch.diff).toFixed(2) : '<span class="c-na">—</span>'}</td>
@@ -990,7 +990,7 @@ function renderTable(shops) {
     // 区域小计行
     const regionRow = document.createElement('tr');
     regionRow.className = 'subtot';
-    regionRow.innerHTML = `<td class="c-name" colspan="2">📍 ${region}区域</td><td colspan="4" style="text-align:right;padding-right:12px;font-size:11px">共 ${regionShops.length} 家门店</td>`;
+    regionRow.innerHTML = `<td class="c-name">📍 ${region}区域</td><td colspan="4" style="text-align:right;padding-right:12px;font-size:11px">共 ${regionShops.length} 家门店</td>`;
     tbody.appendChild(regionRow);
 
     // 各门店行
@@ -1005,7 +1005,7 @@ function renderTable(shops) {
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td class="c-name" style="padding-left:24px!important">${shop.name}</td>
+        <td class="c-name" style="padding-left:24px">${shop.name}</td>
         <td class="c-num">${fmt(revA)}</td>
         <td class="c-num">${fmt(revB)}</td>
         <td class="c-num ${clsUp(ch.diff)}">${ch.diff !== null ? sign(ch.diff) + Math.abs(ch.diff).toFixed(2) : '<span class="c-na">—</span>'}</td>
@@ -1018,7 +1018,7 @@ function renderTable(shops) {
     const regionTotalRow = document.createElement('tr');
     regionTotalRow.className = 'subtot';
     regionTotalRow.innerHTML = `
-      <td class="c-name" colspan="2" style="padding-left:12px">${region}区域汇总</td>
+      <td class="c-name" style="padding-left:12px">${region}区域汇总</td>
       <td class="c-num">${fmt(regionTotalA)}</td>
       <td class="c-num">${fmt(regionTotalB)}</td>
       <td class="c-num ${clsUp(regionCh.diff)}">${regionCh.diff !== null ? sign(regionCh.diff) + Math.abs(regionCh.diff).toFixed(2) : '<span class="c-na">—</span>'}</td>
@@ -1031,7 +1031,7 @@ function renderTable(shops) {
   const grandtot = document.createElement('tr');
   grandtot.className = 'grandtot';
   grandtot.innerHTML = `
-    <td class="c-name" colspan="2">🏢 总部汇总</td>
+    <td class="c-name">🏢 总部汇总</td>
     <td class="c-num">${fmt(grandTotalA)}</td>
     <td class="c-num">${fmt(grandTotalB)}</td>
     <td class="c-num ${clsUp(grandCh.diff)}">${grandCh.diff !== null ? sign(grandCh.diff) + Math.abs(grandCh.diff).toFixed(2) : '<span class="c-na">—</span>'}</td>
