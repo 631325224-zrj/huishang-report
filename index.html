@@ -252,37 +252,38 @@ const API_CONFIG = {
   onlineMonth: 6,
 };
 
-// 各门店配置 - centerId 和 shopId 是门店在收银系统中的 ID
-// shopId 从流水号规则得出：YY000101-260403-0006 中 000101 为朝阳店 shopId
+// 各门店配置 - 使用 centerId 作为 shopId 查询
+// 流水号 YY000101 中的 000101 是门店编号，不是收银系统的 shopId
+// 实际查询时需用 centerId 作为 shopId 参数
 const ALL_SHOPS = [
-  { name:'徽商故里朝阳门店', region:'北京', centerId:247413, shopId:101 },
-  { name:'徽商故里三里河店', region:'北京', centerId:247414, shopId:201 },
-  { name:'徽商故里广安门店', region:'北京', centerId:247415, shopId:301 },
-  { name:'徽商故里元大都店', region:'北京', centerId:247416, shopId:401 },
-  { name:'徽商故里双井店',   region:'北京', centerId:247417, shopId:501 },
-  { name:'徽商故里天津店',   region:'华北', centerId:247418, shopId:601 },
-  { name:'徽商故里济南店',   region:'华北', centerId:247419, shopId:701 },
-  { name:'徽商故里罍街店',   region:'合肥', centerId:247420, shopId:801 },
-  { name:'徽商故里大蜀山店', region:'合肥', centerId:247421, shopId:901 },
-  { name:'徽商故里贡街店',   region:'合肥', centerId:247422, shopId:1001 },
-  { name:'徽商故里小馆店',   region:'合肥', centerId:247423, shopId:1101 },
-  { name:'徽商故里水西门店', region:'合肥', centerId:247424, shopId:1201 },
-  { name:'徽商故里芜湖店',   region:'合肥', centerId:247425, shopId:1301 },
-  { name:'徽商故里骆岗店',   region:'合肥', centerId:247426, shopId:1401 },
-  { name:'徽商故里云城里店', region:'合肥', centerId:247427, shopId:1501 },
-  { name:'徽商故里繁昌店',   region:'合肥', centerId:247428, shopId:1601 },
-  { name:'徽商故里虹桥店',   region:'浙沪', centerId:247429, shopId:1701 },
-  { name:'徽商故里陆家嘴店', region:'浙沪', centerId:247430, shopId:1801 },
-  { name:'徽商故里宁波店',   region:'浙沪', centerId:247431, shopId:1901 },
-  { name:'徽商故里杭州店',   region:'浙沪', centerId:247432, shopId:2001 },
-  { name:'徽商故里昆山店',   region:'浙沪', centerId:247433, shopId:2101 },
-  { name:'徽商故里蚌埠店',   region:'皖北', centerId:247434, shopId:2201 },
-  { name:'徽商故里滁州店',   region:'皖北', centerId:247435, shopId:2301 },
-  { name:'徽商故里阜阳店',   region:'皖北', centerId:247436, shopId:2401 },
-  { name:'徽商故里六安店',   region:'皖北', centerId:247437, shopId:2501 },
-  { name:'徽商故里淮南店',   region:'皖北', centerId:247438, shopId:2601 },
-  { name:'徽商故里仙人洞店', region:'黄山', centerId:247439, shopId:2701 },
-  { name:'徽商故里深圳店',   region:'华南', centerId:247440, shopId:2801 },
+  { name:'徽商故里朝阳门店', region:'北京', centerId:247413 },
+  { name:'徽商故里三里河店', region:'北京', centerId:247414 },
+  { name:'徽商故里广安门店', region:'北京', centerId:247415 },
+  { name:'徽商故里元大都店', region:'北京', centerId:247416 },
+  { name:'徽商故里双井店',   region:'北京', centerId:247417 },
+  { name:'徽商故里天津店',   region:'华北', centerId:247418 },
+  { name:'徽商故里济南店',   region:'华北', centerId:247419 },
+  { name:'徽商故里罍街店',   region:'合肥', centerId:247420 },
+  { name:'徽商故里大蜀山店', region:'合肥', centerId:247421 },
+  { name:'徽商故里贡街店',   region:'合肥', centerId:247422 },
+  { name:'徽商故里小馆店',   region:'合肥', centerId:247423 },
+  { name:'徽商故里水西门店', region:'合肥', centerId:247424 },
+  { name:'徽商故里芜湖店',   region:'合肥', centerId:247425 },
+  { name:'徽商故里骆岗店',   region:'合肥', centerId:247426 },
+  { name:'徽商故里云城里店', region:'合肥', centerId:247427 },
+  { name:'徽商故里繁昌店',   region:'合肥', centerId:247428 },
+  { name:'徽商故里虹桥店',   region:'浙沪', centerId:247429 },
+  { name:'徽商故里陆家嘴店', region:'浙沪', centerId:247430 },
+  { name:'徽商故里宁波店',   region:'浙沪', centerId:247431 },
+  { name:'徽商故里杭州店',   region:'浙沪', centerId:247432 },
+  { name:'徽商故里昆山店',   region:'浙沪', centerId:247433 },
+  { name:'徽商故里蚌埠店',   region:'皖北', centerId:247434 },
+  { name:'徽商故里滁州店',   region:'皖北', centerId:247435 },
+  { name:'徽商故里阜阳店',   region:'皖北', centerId:247436 },
+  { name:'徽商故里六安店',   region:'皖北', centerId:247437 },
+  { name:'徽商故里淮南店',   region:'皖北', centerId:247438 },
+  { name:'徽商故里仙人洞店', region:'黄山', centerId:247439 },
+  { name:'徽商故里深圳店',   region:'华南', centerId:247440 },
 ];
 
 const REGION_ORDER = ['北京','华北','合肥','皖北','浙沪','黄山','华南'];
@@ -331,39 +332,38 @@ async function getToken(retryCount = 0) {
 }
 
 // 查询单个日期的数据
+// 注意：收银系统 API 中 shopId 参数实际应传入门店的 centerId
 async function queryRevenue(settleDate, dateType, centerId, shopId) {
-  const cacheKey = `${centerId}_${shopId}_${settleDate}_${dateType}`;
+  // 使用 shopId（或 centerId）作为查询参数
+  const queryId = shopId || centerId;
+  const cacheKey = `${centerId}_${queryId}_${settleDate}_${dateType}`;
   if (SHOP_DATA_CACHE[cacheKey] !== undefined) {
     return SHOP_DATA_CACHE[cacheKey];
   }
   
-  const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${settleDate}&dateType=${dateType}`;
+  const qs = `centerId=${centerId}&shopId=${queryId}&settleDate=${settleDate}&dateType=${dateType}`;
   const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
     method:'POST',
     headers:{'Content-Type':'application/json','access_token':token,'accessid':API_CONFIG.accessId,'granttype':'client'},
   });
   const json = await res.json();
   
-  // 调试：记录原始返回数据
-  console.log(`API [${dateType}] ${settleDate}:`, JSON.stringify(json, null, 2).slice(0, 500));
-  
-  // 提取营收数据 - 使用原来 Netlify Function 中的正确格式
-  // 原路径: /api/datatransfer/getBusinessSituation
-  // 原数据: res?.data?.List?.businessData?.orig
-  let income = 0;
-  if (json?.data?.List?.businessData?.orig) {
-    income = parseFloat(json.data.List.businessData.orig) || 0;
-  } else if (json?.data?.businessData?.orig) {
-    income = parseFloat(json.data.businessData.orig) || 0;
-  } else if (json?.data?.orig) {
-    income = parseFloat(json.data.orig) || 0;
-  } else if (json?.data?.income) {
-    income = parseFloat(json.data.income) || 0;
-  } else if (json?.data?.incomeTotal) {
-    income = parseFloat(json.data.incomeTotal) || 0;
+  // 调试：记录原始返回数据（仅在总部查询时打印）
+  if (centerId === API_CONFIG.centerId) {
+    console.log(`API [${dateType}] ${settleDate}:`, JSON.stringify(json, null, 2).slice(0, 500));
   }
   
-  SHOP_DATA_CACHE[cacheKey] = { settleDate, dateType, centerId, shopId, income, raw: json };
+  // 提取营收数据 - 使用 businessData.orig 字段
+  let income = 0;
+  if (json?.data?.List?.businessData?.orig !== undefined) {
+    income = parseFloat(json.data.List.businessData.orig) || 0;
+  } else if (json?.data?.businessData?.orig !== undefined) {
+    income = parseFloat(json.data.businessData.orig) || 0;
+  } else if (json?.data?.orig !== undefined) {
+    income = parseFloat(json.data.orig) || 0;
+  }
+  
+  SHOP_DATA_CACHE[cacheKey] = { settleDate, dateType, centerId, shopId: queryId, income, raw: json };
   return SHOP_DATA_CACHE[cacheKey];
 }
 
@@ -392,8 +392,7 @@ function updateProgress(percent, text) {
 
 // ═══════════════════════════════════════════════════════
 // 优化的加载策略：分阶段加载
-// 阶段1：只加载今天 + 近30天（最快可见）
-// 阶段2：后台异步加载近12个月数据
+// 查询所有门店数据并汇总（因为总部 centerId=247412 返回0）
 // ═══════════════════════════════════════════════════════
 
 async function loadAllData() {
@@ -408,10 +407,7 @@ async function loadAllData() {
   const curMonth = now.getMonth() + 1;
   const today = `${curYear}-${p(curMonth)}-${p(now.getDate())}`;
   
-  // ========== 阶段1: 只加载今天 + 近30天 ==========
-  updateProgress(15, '加载今日数据…');
-  
-  // 生成近30天日期
+  // ========== 生成日期范围 ==========
   const days = [];
   for (let i = 29; i >= 0; i--) {
     const d = new Date(now);
@@ -419,7 +415,6 @@ async function loadAllData() {
     days.push(d.toISOString().slice(0, 10));
   }
   
-  // 生成近12个月
   const months = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now);
@@ -429,53 +424,78 @@ async function loadAllData() {
     months.push({ key: `${y}-${p(m)}`, settleDate: `${y}-${p(m)}-01` });
   }
   
-  // 生成年度数据
   const years = [];
   for (let y = API_CONFIG.onlineYear; y <= curYear; y++) {
     years.push({ key: String(y), settleDate: `${y}-01-01` });
   }
   
-  // 查询日数据
-  updateProgress(25, '查询日数据…');
-  const dayTasks = days.map(d => () => queryRevenue(d, 'day', API_CONFIG.centerId, API_CONFIG.centerId));
-  const dayResults = await batchQuery(dayTasks, 15, p => updateProgress(25 + p * 0.5, `日数据 ${p}%…`));
+  // ========== 获取所有门店的 centerId ==========
+  const shopIds = ALL_SHOPS.map(s => s.centerId);
+  
+  // ========== 查询并汇总所有数据 ==========
+  updateProgress(15, '加载日数据…');
+  
+  // 生成所有查询任务（日期 × 门店）
+  const dayTasks = [];
+  days.forEach(d => {
+    shopIds.forEach(shopId => {
+      dayTasks.push(() => queryRevenue(d, 'day', API_CONFIG.centerId, shopId));
+    });
+  });
+  
+  // 并发查询（限制并发数）
+  const dayResults = await batchQuery(dayTasks, 20, p => updateProgress(15 + p * 0.6, `日数据 ${p}%…`));
   
   // 汇总日数据
   const dailyData = {};
+  days.forEach(d => { dailyData[d] = 0; });
   dayResults.forEach(r => {
-    if (r?.income) dailyData[r.settleDate] = r.income / 10000;
+    if (r?.income && r?.settleDate) {
+      dailyData[r.settleDate] = (dailyData[r.settleDate] || 0) + r.income / 10000;
+    }
   });
   
-  // 初始化月年和年数据（后续异步加载）
+  // 后台加载月数据（不阻塞）
   const monthlyData = {};
   const yearlyData = {};
   
-  // 后台加载月数据（不阻塞）
+  updateProgress(80, '后台加载月数据…');
   setTimeout(async () => {
     try {
-      updateProgress(75, '查询月数据…');
-      const monthTasks = months.map(m => () => queryRevenue(m.settleDate, 'month', API_CONFIG.centerId, API_CONFIG.centerId));
-      const monthResults = await batchQuery(monthTasks, 15);
+      const monthTasks = [];
+      months.forEach(m => {
+        shopIds.forEach(shopId => {
+          monthTasks.push(() => queryRevenue(m.settleDate, 'month', API_CONFIG.centerId, shopId));
+        });
+      });
+      
+      const monthResults = await batchQuery(monthTasks, 30);
       monthResults.forEach(r => {
-        if (r?.income) {
+        if (r?.income && r?.settleDate) {
           const key = r.settleDate.slice(0, 7);
-          monthlyData[key] = r.income / 10000;
+          monthlyData[key] = (monthlyData[key] || 0) + r.income / 10000;
         }
       });
       
-      updateProgress(90, '查询年数据…');
-      const yearTasks = years.map(y => () => queryRevenue(y.settleDate, 'year', API_CONFIG.centerId, API_CONFIG.centerId));
-      const yearResults = await batchQuery(yearTasks, 15);
+      // 年数据
+      const yearTasks = [];
+      years.forEach(y => {
+        shopIds.forEach(shopId => {
+          yearTasks.push(() => queryRevenue(y.settleDate, 'year', API_CONFIG.centerId, shopId));
+        });
+      });
+      
+      const yearResults = await batchQuery(yearTasks, 30);
       yearResults.forEach(r => {
-        if (r?.income) {
+        if (r?.income && r?.settleDate) {
           const key = r.settleDate.slice(0, 4);
-          yearlyData[key] = r.income / 10000;
+          yearlyData[key] = (yearlyData[key] || 0) + r.income / 10000;
         }
       });
       
       updateProgress(100, '全部数据加载完成');
       
-      // 数据更新后重新渲染
+      // 更新渲染
       if (DATA) {
         DATA.monthlyData = monthlyData;
         DATA.yearlyData = yearlyData;
@@ -501,8 +521,8 @@ async function loadAllData() {
     allShops: ALL_SHOPS,
     summary: {
       today: dailyData[today] || 0,
-      currentMonth: 0, // 月数据异步加载
-      currentYear: 0,  // 年数据异步加载
+      currentMonth: monthlyData[`${curYear}-${p(curMonth)}`] || 0,
+      currentYear: yearlyData[String(curYear)] || 0,
     },
   };
 }
