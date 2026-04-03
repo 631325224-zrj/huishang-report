@@ -8,50 +8,11 @@
 
 **配置步骤**：
 
-1. **创建仓库**
-   - 在 GitHub 创建空仓库（不要勾选 README）
-   - 仓库名：如 `huishang-report`
-
-2. **本地初始化**
-   ```bash
-   cd ~/WorkBuddy/项目名
-   git init
-   git remote add origin https://github.com/用户名/仓库名.git
-   ```
-
-3. **配置永久认证（避免每次输入 Token）**
-   ```bash
-   # 配置 Credential Helper 保存到 macOS 钥匙串
-   git config --global credential.helper osxkeychain
-   
-   # 切换到 HTTPS（比 SSH 更稳定）
-   git remote set-url origin https://github.com/用户名/仓库名.git
-   ```
-
-4. **GitHub 生成 Personal Access Token**
-   - 打开 https://github.com/settings/tokens
-   - 点 **Generate new token (classic)**
-   - Note：填写说明如 `项目名 deploy`
-   - Expiration：选择 **No expiration**（永久有效）
-   - Scopes：勾选 `repo`
-   - 生成后复制保存
-
-5. **首次推送**
-   ```bash
-   git add .
-   git commit -m "initial"
-   git push
-   # 用户名：GitHub 用户名
-   # 密码：粘贴 Token
-   ```
-
-6. **启用 GitHub Pages**
-   - 仓库 Settings → Pages
-   - Source：选择 `main` 分支和 `/ (root)`
-   - 保存后等待 1-2 分钟
-
-7. **访问地址**
-   - `https://用户名.github.io/仓库名`
+1. **创建仓库** - 在 GitHub 创建空仓库（不要勾选 README）
+2. **本地初始化** - `git init` + `git remote add origin HTTPS URL`
+3. **配置永久认证** - `git config --global credential.helper osxkeychain`
+4. **GitHub 生成 Personal Access Token** - 永久有效，勾选 repo
+5. **首次推送** - 推送后启用 GitHub Pages
 
 ---
 
@@ -61,17 +22,54 @@
 |------|------|----------|
 | 回收数据报表 | 631325224-zrj/huishang-report | https://631325224-zrj.github.io/huishang-report |
 
-### 常用命令
+---
 
-```bash
-# 修改代码后推送
-cd ~/WorkBuddy/Claw && git add . && git commit -m "更新说明" && git push
+## huishang-report 报表项目 - 关键里程碑
 
-# 查看状态
-git status
+### 🎯 里程碑1（2026-04-03）：纯收金额字段修复
 
-# 查看提交历史
-git log --oneline
+**问题**：报表显示的是"营收"数据，而不是"纯收金额"
+
+**根本原因**：API 返回的数据结构不同于预期
+
+**解决方案**：找到了正确的字段路径：
+- **纯收金额**：`data.List.income.incomeTotal`
+- **非收入金额**：`data.List.notIncome.notIncomeTotal`
+- **实收（营业收入）**：`data.List.businessData.last`
+- **应收（营业额）**：`data.List.businessData.orig`
+- **优惠金额**：`data.List.businessData.discTotal`
+
+**验证公式**：
+- `应收 - 优惠 = 实收`
+- `实收 - 非收入 = 纯收`
+
+**代码位置**：`index.html` 的 `fetchShopData` 函数
+
+---
+
+## 收银系统 API 数据结构（huiShang）
+
+```json
+{
+  "data": {
+    "List": {
+      "income": {
+        "incomeTotal": 938.00,      // 纯收金额
+        "incomeList": [...]
+      },
+      "notIncome": {
+        "notIncomeTotal": 0.00,    // 非收入金额
+        "notIncomeList": []
+      },
+      "businessData": {
+        "orig": 1851.50,           // 应收（营业额）
+        "discTotal": 913.50,       // 优惠金额
+        "last": 938.00,            // 实收（营业收入）
+        ...
+      }
+    }
+  }
+}
 ```
 
 ---

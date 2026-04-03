@@ -56,16 +56,20 @@ button { border: 1px solid #ddd; border-radius: 6px; padding: 6px 14px; font-siz
 .table-header .badge { font-size: 11px; background: #fdecea; color: #c0392b; padding: 2px 8px; border-radius: 10px; font-weight: 600; margin-left: 8px; }
 .table-header .meta { font-size: 11px; color: #999; font-weight: 400; margin-left: auto; }
 .table-header .actions { display: flex; gap: 8px; margin-left: auto; }
-.table-scroll { max-height: 500px; overflow: auto; }
+.table-scroll { max-height: 500px; overflow: auto; transition: max-height 0.3s ease; }
+.table-scroll.expanded { max-height: calc(100vh - 400px); }
 .table-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
 .table-scroll::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-th, td { border-bottom: 1px solid #eee; padding: 7px 10px; text-align: center; white-space: nowrap; }
-th { background: #fafafa; font-weight: 600; color: #555; font-size: 11px; position: sticky; top: 0; z-index: 1; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+th, td { border-bottom: 1px solid #eee; padding: 7px 10px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+th { background: #fafafa; font-weight: 600; color: #555; font-size: 11px; position: sticky; top: 0; z-index: 1; cursor: pointer; user-select: none; }
+th:hover { background: #f0f0f0; }
 th.g1 { background: #fdecea; color: #c0392b; }
-.c-name { text-align: left !important; padding-left: 12px !important; min-width: 100px; }
-.c-num { text-align: right !important; padding-right: 12px !important; font-variant-numeric: tabular-nums; }
-.c-pct { text-align: right !important; padding-right: 10px !important; }
+th .sort-icon { font-size: 10px; margin-left: 4px; color: #999; }
+th .sort-icon.active { color: #C0392B; }
+.c-name { text-align: left !important; padding-left: 12px !important; width: 160px; }
+.c-num { text-align: right !important; padding-right: 12px !important; font-variant-numeric: tabular-nums; width: 120px; }
+.c-pct { text-align: right !important; padding-right: 10px !important; width: 100px; }
 .c-up { color: #c0392b; font-weight: 600; }
 .c-down { color: #27ae60; font-weight: 600; }
 .c-na { color: #ccc; font-size: 11px; }
@@ -223,19 +227,15 @@ canvas { display: block; }
         <button class="btn btn-export" onclick="exportData()">📥 导出</button>
       </div>
     </div>
-    <div class="table-scroll">
+    <div class="table-scroll" id="table-scroll">
       <table>
         <thead>
           <tr>
-            <th colspan="2" rowspan="2">区域 / 门店</th>
-            <th class="g1" colspan="2">纯收金额（元）</th>
-            <th class="g1" colspan="2">变化</th>
-          </tr>
-          <tr>
-            <th id="th-a" class="g1">当期</th>
-            <th id="th-b" class="g1">对比期</th>
-            <th class="g1">增减额</th>
-            <th class="g1">增减幅</th>
+            <th class="c-name" colspan="2" onclick="sortTable('name')">区域 / 门店<span class="sort-icon" id="sort-name">⇅</span></th>
+            <th class="c-num" onclick="sortTable('revA')" title="点击排序">当期<span class="sort-icon" id="sort-revA">⇅</span></th>
+            <th class="c-num" onclick="sortTable('revB')" title="点击排序">对比期<span class="sort-icon" id="sort-revB">⇅</span></th>
+            <th class="c-num" onclick="sortTable('diff')" title="点击排序">增减额<span class="sort-icon" id="sort-diff">⇅</span></th>
+            <th class="c-pct" onclick="sortTable('pct')" title="点击排序">增减幅<span class="sort-icon" id="sort-pct">⇅</span></th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -311,6 +311,9 @@ let STATE = {
 let chartBar=null, chartLine=null;
 let chartsCollapsed = false;
 let token = null;
+
+// 排序状态
+let SORT = { field: null, asc: true };
 
 // 缓存
 const SHOP_DATA_CACHE = {};
@@ -822,14 +825,38 @@ function renderSummary() {
 function toggleCharts() {
   chartsCollapsed = !chartsCollapsed;
   const container = document.getElementById('charts-container');
+  const tableScroll = document.getElementById('table-scroll');
   const btn = document.getElementById('btnToggleCharts');
   if (chartsCollapsed) {
     container.classList.add('collapsed');
+    tableScroll.classList.add('expanded');
     btn.textContent = '📈 展开趋势图';
   } else {
     container.classList.remove('collapsed');
+    tableScroll.classList.remove('expanded');
     btn.textContent = '📊 收起趋势图';
   }
+}
+
+// ════════ 表格排序 ════════
+function sortTable(field) {
+  if (SORT.field === field) {
+    SORT.asc = !SORT.asc;
+  } else {
+    SORT.field = field;
+    SORT.asc = true;
+  }
+  
+  // 更新排序图标
+  document.querySelectorAll('.sort-icon').forEach(el => el.classList.remove('active'));
+  const icon = document.getElementById('sort-' + field);
+  if (icon) {
+    icon.classList.add('active');
+    icon.textContent = SORT.asc ? '↑' : '↓';
+  }
+  
+  // 重新渲染表格
+  render();
 }
 
 // ════════ 渲染图表 ════════
@@ -1024,6 +1051,34 @@ async function render() {
     if (STATE.shop && s.name !== STATE.shop) return false;
     return true;
   });
+  
+  // 应用排序
+  if (SORT.field && shops.length > 1) {
+    shops.sort((a, b) => {
+      let valA, valB;
+      const revA_a = getSummaryRevenue(true, a.centerId);
+      const revA_b = getSummaryRevenue(true, b.centerId);
+      const revB_a = getSummaryRevenue(false, a.centerId);
+      const revB_b = getSummaryRevenue(false, b.centerId);
+      const ch_a = calcChange(revA_a, revB_a);
+      const ch_b = calcChange(revA_b, revB_b);
+      
+      switch (SORT.field) {
+        case 'name': valA = a.name; valB = b.name; break;
+        case 'revA': valA = revA_a; valB = revA_b; break;
+        case 'revB': valA = revB_a; valB = revB_b; break;
+        case 'diff': valA = ch_a.diff ?? 0; valB = ch_b.diff ?? 0; break;
+        case 'pct': valA = ch_a.pct ?? 0; valB = ch_b.pct ?? 0; break;
+        default: return 0;
+      }
+      
+      if (typeof valA === 'string') {
+        return SORT.asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      }
+      return SORT.asc ? valA - valB : valB - valA;
+    });
+  }
+  
   document.getElementById('table-meta').textContent = `共 ${shops.length} 家门店`;
 
   renderSummary();
