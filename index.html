@@ -11,7 +11,8 @@ body { font-family: "Microsoft YaHei","PingFang SC","SimSun",sans-serif; backgro
 .topbar { background: linear-gradient(135deg,#8B1A1A,#C0392B,#E74C3C); border-radius: 12px; padding: 16px 28px; color: #fff; display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; box-shadow: 0 4px 20px rgba(139,26,26,0.35); }
 .topbar h1 { font-size: 17px; font-weight: 700; letter-spacing: 2px; display: flex; align-items: center; gap: 10px; }
 .topbar .sub { font-size: 11px; opacity: 0.85; text-align: right; line-height: 1.6; }
-.topbar .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #27ae60; margin-right: 5px; animation: pulse 2s infinite; }
+.topbar .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #27ae60; margin-right: 5px; }
+.topbar .status-dot.loading { background: #f39c12; animation: pulse 1s infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 .notice-bar { border-radius: 8px; padding: 8px 16px; margin-bottom: 10px; font-size: 12px; display: none; align-items: flex-start; gap: 8px; line-height: 1.5; }
 .notice-bar.visible { display: flex; }
@@ -27,10 +28,13 @@ button { border: 1px solid #ddd; border-radius: 6px; padding: 6px 14px; font-siz
 .btn { padding: 6px 14px; font-weight: 600; }
 .btn-primary { background: #C0392B; color: #fff; border-color: #C0392B; }
 .btn-primary:hover { background: #a93226; }
+.btn-export { background: #2ecc71; color: #fff; border-color: #2ecc71; }
+.btn-export:hover { background: #27ae60; }
 .btn-active { background: #C0392B !important; color: #fff !important; border-color: #C0392B !important; }
 .dim-btn { font-weight: 600; min-width: 60px; }
 .ctrl-divider { width: 1px; height: 24px; background: #eee; margin: 0 4px; }
 .ctrl-hint { font-size: 11px; color: #bbb; margin-left: auto; }
+.ctrl-hint .loading-indicator { color: #f39c12; }
 .summary-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.06); margin-bottom: 12px; }
 .scard { padding: 16px 20px; border-right: 1px solid #f0f0f0; }
 .scard:last-child { border-right: none; }
@@ -42,7 +46,8 @@ button { border: 1px solid #ddd; border-radius: 6px; padding: 6px 14px; font-siz
 .down { color: #27ae60; }
 .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
 .chart-card { background: #fff; border-radius: 12px; padding: 16px 18px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
-.chart-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #eee; }
+.chart-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between; }
+.chart-title .chart-actions { display: flex; gap: 6px; }
 .chart-canvas-wrap { position: relative; height: 220px; }
 canvas { display: block; }
 .table-card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.06); margin-bottom: 12px; }
@@ -50,6 +55,7 @@ canvas { display: block; }
 .table-header::before { content: ''; width: 4px; height: 16px; background: #C0392B; border-radius: 2px; }
 .table-header .badge { font-size: 11px; background: #fdecea; color: #c0392b; padding: 2px 8px; border-radius: 10px; font-weight: 600; margin-left: 8px; }
 .table-header .meta { font-size: 11px; color: #999; font-weight: 400; margin-left: auto; }
+.table-header .actions { display: flex; gap: 8px; margin-left: auto; }
 .table-scroll { max-height: 500px; overflow: auto; }
 .table-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
 .table-scroll::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
@@ -75,6 +81,8 @@ tr.grandtot:hover td { background: #ffe680 !important; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-text { font-size: 16px; color: #888; font-weight: 500; }
 .loading-sub { font-size: 12px; color: #bbb; max-width: 400px; text-align: center; line-height: 1.6; }
+.loading-progress { width: 200px; height: 6px; background: #eee; border-radius: 3px; overflow: hidden; }
+.loading-progress-bar { height: 100%; background: #C0392B; border-radius: 3px; transition: width 0.3s; width: 0%; }
 .footer { text-align: center; font-size: 11px; color: #ccc; margin-top: 8px; }
 @media (max-width: 900px) {
   .charts-grid { grid-template-columns: 1fr; }
@@ -91,13 +99,14 @@ tr.grandtot:hover td { background: #ffe680 !important; }
   <div class="spinner"></div>
   <div class="loading-text">正在拉取收银系统数据…</div>
   <div class="loading-sub" id="loading-status">连接收银系统 API</div>
+  <div class="loading-progress"><div class="loading-progress-bar" id="loading-progress-bar"></div></div>
 </div>
 
 <div class="wrap">
   <div class="topbar">
     <h1>🏮 徽商故里 · 经营数据看板</h1>
     <div class="sub">
-      <span class="status-dot"></span>实时连接收银系统<br>
+      <span class="status-dot" id="status-dot"></span><span id="status-text">实时连接收银系统</span><br>
       <span id="topbar-time">—</span>
     </div>
   </div>
@@ -188,11 +197,17 @@ tr.grandtot:hover td { background: #ffe680 !important; }
 
   <div class="charts-grid">
     <div class="chart-card">
-      <div class="chart-title" id="chart-title-bar">📊 当期 vs 对比期趋势</div>
+      <div class="chart-title">
+        <span id="chart-title-bar">📊 当期 vs 对比期趋势</span>
+        <button class="btn btn-export" onclick="exportChart('chartBar')" title="导出图表">📥 导出图表</button>
+      </div>
       <div class="chart-canvas-wrap"><canvas id="chartBar"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">📈 近12个月营收走势</div>
+      <div class="chart-title">
+        <span>📈 近12个月营收走势</span>
+        <button class="btn btn-export" onclick="exportChart('chartLine')" title="导出图表">📥 导出图表</button>
+      </div>
       <div class="chart-canvas-wrap"><canvas id="chartLine"></canvas></div>
     </div>
   </div>
@@ -202,6 +217,10 @@ tr.grandtot:hover td { background: #ffe680 !important; }
       <span id="table-title">各门店经营数据</span>
       <span class="badge" id="table-badge"></span>
       <span class="meta" id="table-meta"></span>
+      <div class="actions">
+        <button class="btn btn-export" onclick="exportTable()">📊 导出表格</button>
+        <button class="btn btn-export" onclick="exportFullReport()">📋 导出完整报告</button>
+      </div>
     </div>
     <div class="table-scroll">
       <table>
@@ -229,6 +248,7 @@ tr.grandtot:hover td { background: #ffe680 !important; }
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script>
 'use strict';
 
@@ -286,6 +306,10 @@ let STATE = {
   region:'', shop:'',
 };
 let chartBar=null, chartLine=null;
+let token = null;
+let loadProgress = 0;
+let loadPhase = 0;
+const LOAD_PHASES = ['基础数据', '近期数据', '历史数据'];
 
 // ════════ API 层 ════════
 const p = n => String(n).padStart(2,'0');
@@ -297,23 +321,28 @@ async function getToken() {
   return json.access_token || null;
 }
 
-// 门店营收数据缓存 - 键为 "shopId_日期" 避免多门店数据覆盖
-const shopRevenueCache = {};
+// 缓存所有查询结果 - 永久缓存避免重复请求
+const QUERY_CACHE = {};
 
-async function queryRevenue(token, settleDate, dateType, centerId, shopId) {
-  const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${settleDate}&dateType=${dateType}`;
+async function queryRevenue(settleDate, dateType, centerId, shopCenterId) {
+  const cacheKey = `${shopCenterId}_${settleDate}_${dateType}`;
+  
+  // 检查缓存
+  if (QUERY_CACHE[cacheKey] !== undefined) {
+    return QUERY_CACHE[cacheKey];
+  }
+  
+  const qs = `centerId=${centerId}&shopId=${shopCenterId}&settleDate=${settleDate}&dateType=${dateType}`;
   const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
     method:'POST',
     headers:{'Content-Type':'application/json','access_token':token,'accessid':API_CONFIG.accessId,'granttype':'client'},
   });
   const json = await res.json();
-  // 纯收金额 = income.incomeTotal
   const income = parseFloat(json?.data?.List?.income?.incomeTotal) || 0;
-  // 缓存门店数据 - 使用 shopId + 日期 作为键，避免多门店共用 centerId 导致覆盖
-  const cacheKey = `${shopId}_${settleDate}`;
-  if (!shopRevenueCache[cacheKey]) shopRevenueCache[cacheKey] = { income, code: json.code||0 };
-  else { shopRevenueCache[cacheKey].income = income; shopRevenueCache[cacheKey].code = json.code||0; }
-  return {settleDate, dateType, centerId, shopId, income, code: json.code||0};
+  
+  // 存入缓存
+  QUERY_CACHE[cacheKey] = {settleDate, dateType, centerId, shopCenterId, income, code: json.code||0};
+  return QUERY_CACHE[cacheKey];
 }
 
 async function concurrentFetch(tasks, concurrency=8) {
@@ -325,163 +354,283 @@ async function concurrentFetch(tasks, concurrency=8) {
   return results;
 }
 
-async function loadAllData() {
-  const el = document.getElementById('loading-status');
-  el.textContent = '正在获取访问凭证…';
-  const token = await getToken();
-  if (!token) throw new Error('无法获取 API Token，请检查凭证配置');
+// 批量查询 - 带进度更新
+async function batchQuery(tasks, progressCallback) {
+  const results = [];
+  const total = tasks.length;
+  let completed = 0;
+  
+  for (let i=0; i<tasks.length; i+=8) {
+    const batch = tasks.slice(i, i+8);
+    const r = await Promise.all(batch.map(t=>t()));
+    results.push(...r);
+    completed += batch.length;
+    if (progressCallback) {
+      progressCallback(Math.round((completed / total) * 100));
+    }
+  }
+  return results;
+}
 
-  // 清空缓存
-  Object.keys(shopRevenueCache).forEach(k => delete shopRevenueCache[k]);
+// ═══════════════════════════════════════════════════════
+// 分阶段渐进式加载 - 核心优化
+// ═══════════════════════════════════════════════════════
 
-  el.textContent = '已连接，正在拉取各门店营收数据…';
+// 阶段1: 只加载当前核心数据（今天、本月、去年同月）- 最快呈现
+async function loadPhase1_Core() {
+  updateProgress(10, '获取访问凭证…');
+  token = await getToken();
+  if (!token) throw new Error('无法获取 API Token');
+  
   const now = new Date();
-  const curYear = now.getFullYear(), curMonth = now.getMonth()+1;
+  const curYear = now.getFullYear();
+  const curMonth = now.getMonth() + 1;
   const today = `${curYear}-${p(curMonth)}-${p(now.getDate())}`;
-
-  // 过去30天
-  const days = [];
-  for (let i=29; i>=0; i--) {
-    const d = new Date(now); d.setDate(d.getDate()-i);
-    days.push(d.toISOString().slice(0,10));
-  }
-
-  // 过去12个月（系统上线后）
-  const months = [];
-  for (let i=11; i>=0; i--) {
-    const d = new Date(now); d.setMonth(d.getMonth()-i);
-    const y=d.getFullYear(), m=d.getMonth()+1;
-    if (y<API_CONFIG.onlineYear || (y===API_CONFIG.onlineYear && m<API_CONFIG.onlineMonth)) continue;
-    months.push({key:`${y}-${p(m)}`, settleDate:`${y}-${p(m)}-01`});
-  }
-
-  // 上线后各年
-  const years = [];
-  for (let y=API_CONFIG.onlineYear; y<=curYear; y++) years.push({y, settleDate:`${y}-01-01`});
-
-  // 获取总部 centerId
-  const centerId = API_CONFIG.centerId;
-
-  el.textContent = `拉取 ${days.length}天 × ${ALL_SHOPS.length}门店 + ${months.length}月 + ${years.length}年数据…`;
-
-  // 查询所有门店的所有日期数据
-  // 注意：centerId 用总部ID，shopId 用各门店ID
-  const [dayR, monthR, yearR] = await Promise.all([
-    concurrentFetch(days.flatMap(d => ALL_SHOPS.map(shop => () => queryRevenue(token, d, 'day', centerId, shop.centerId)))),
-    concurrentFetch(months.flatMap(m => ALL_SHOPS.map(shop => () => queryRevenue(token, m.settleDate, 'month', centerId, shop.centerId)))),
-    concurrentFetch(years.flatMap(y => ALL_SHOPS.map(shop => () => queryRevenue(token, y.settleDate, 'year', centerId, shop.centerId)))),
-  ]);
-
-  // 按日期汇总所有门店数据（纯收金额）
-  const dailyData={}, monthlyData={}, yearlyData={};
-  dayR.forEach(r=>{
-    const key = r.settleDate;
-    dailyData[key] = (dailyData[key]||0) + r.income;
+  const lastYearSameMonth = `${curYear - 1}-${p(curMonth)}-01`;
+  const curMonthStart = `${curYear}-${p(curMonth)}-01`;
+  
+  updateProgress(20, '加载核心数据（今日、本月、去年同月）…');
+  
+  // 只查询今天、本月、去年同月的数据
+  const coreDates = [today, curMonthStart, lastYearSameMonth];
+  
+  const tasks = coreDates.flatMap(d => 
+    ALL_SHOPS.map(shop => () => queryRevenue(d, 'day', API_CONFIG.centerId, shop.centerId))
+  );
+  
+  const results = await batchQuery(tasks, p => updateProgress(20 + p * 0.4, '核心数据加载中…'));
+  
+  // 汇总
+  const dailyData = {};
+  results.forEach(r => {
+    if (r.dateType === 'day') {
+      dailyData[r.settleDate] = (dailyData[r.settleDate] || 0) + r.income;
+    }
   });
-  monthR.forEach(r=>{
-    const key = r.settleDate.slice(0,7);
-    monthlyData[key] = (monthlyData[key]||0) + r.income;
-  });
-  yearR.forEach(r=>{
-    const key = r.settleDate.slice(0,4);
-    yearlyData[key] = (yearlyData[key]||0) + r.income;
-  });
-
-  // 转换为万元
-  Object.keys(dailyData).forEach(k => dailyData[k] /= 10000);
-  Object.keys(monthlyData).forEach(k => monthlyData[k] /= 10000);
-  Object.keys(yearlyData).forEach(k => yearlyData[k] /= 10000);
-
-  const monthsWithData = Object.values(monthlyData).filter(v=>v>0).length;
-  const daysWithData   = Object.values(dailyData).filter(v=>v>0).length;
-  const curMonthKey = `${curYear}-${p(curMonth)}`;
-  const lastMonthKey = curMonth===1 ? `${curYear-1}-12` : `${curYear}-${p(curMonth-1)}`;
-
+  
   return {
-    success:true, generatedAt:now.toISOString(), today, curYear, curMonth,
-    availableYears: years.map(y=>y.y),
-    availableMonths: months.map(m=>m.key),
-    dailyDates: days,
-    allShops: ALL_SHOPS,
-    dailyData, monthlyData, yearlyData,
-    summary:{
-      today: dailyData[today]||0,
-      currentMonth: monthlyData[curMonthKey]||0,
-      currentYear: yearlyData[String(curYear)]||0,
-      lastMonthKey, lastYear: String(curYear-1),
-    },
-    apiStatus:{tokenOk:true, monthsWithData, daysWithData},
+    success: true,
+    generatedAt: now.toISOString(),
+    today,
+    curYear,
+    curMonth,
+    dailyData,
+    monthlyData: {},
+    yearlyData: {},
+    coreLoaded: true
   };
 }
 
+// 阶段2: 后台加载近期数据（近30天、近12个月）
+async function loadPhase2_Recent() {
+  updateProgress(60, '加载近期数据（近30天、近12个月）…');
+  
+  const now = new Date();
+  const curYear = now.getFullYear();
+  const curMonth = now.getMonth() + 1;
+  
+  // 过去30天
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+  
+  // 过去12个月
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now);
+    d.setMonth(d.getMonth() - i);
+    const y = d.getFullYear(), m = d.getMonth() + 1;
+    if (y < API_CONFIG.onlineYear || (y === API_CONFIG.onlineYear && m < API_CONFIG.onlineMonth)) continue;
+    months.push({ key: `${y}-${p(m)}`, settleDate: `${y}-${p(m)}-01` });
+  }
+  
+  const dayTasks = days.flatMap(d =>
+    ALL_SHOPS.map(shop => () => queryRevenue(d, 'day', API_CONFIG.centerId, shop.centerId))
+  );
+  
+  const monthTasks = months.flatMap(m =>
+    ALL_SHOPS.map(shop => () => queryRevenue(m.settleDate, 'month', API_CONFIG.centerId, shop.centerId))
+  );
+  
+  const dayR = await batchQuery(dayTasks, p => updateProgress(60 + p * 0.25, '近30天数据…'));
+  const monthR = await batchQuery(monthTasks, p => updateProgress(85 + p * 0.1, '近12个月数据…'));
+  
+  return { dayR, monthR, months };
+}
+
+// 阶段3: 后台加载历史数据（上线的各年）
+async function loadPhase3_History() {
+  updateProgress(95, '加载历史年度数据…');
+  
+  const now = new Date();
+  const curYear = now.getFullYear();
+  
+  const years = [];
+  for (let y = API_CONFIG.onlineYear; y <= curYear; y++) {
+    years.push({ y, settleDate: `${y}-01-01` });
+  }
+  
+  const yearTasks = years.flatMap(y =>
+    ALL_SHOPS.map(shop => () => queryRevenue(y.settleDate, 'year', API_CONFIG.centerId, shop.centerId))
+  );
+  
+  const yearR = await batchQuery(yearTasks, p => updateProgress(95 + p * 0.05, '年度数据…'));
+  
+  return { yearR, years };
+}
+
+// 主加载函数 - 协调三个阶段
+async function loadAllData() {
+  // 阶段1: 核心数据（同步，必须先完成）
+  const phase1 = await loadPhase1_Core();
+  
+  // 阶段2: 近期数据（后台）
+  const phase2Promise = loadPhase2_Recent();
+  
+  // 阶段3: 历史数据（后台）
+  const phase3Promise = loadPhase3_History();
+  
+  // 等待阶段2完成
+  const phase2 = await phase2Promise;
+  
+  // 合并数据
+  phase1.monthlyData = {};
+  phase2.monthR.forEach(r => {
+    const key = r.settleDate.slice(0, 7);
+    phase1.monthlyData[key] = (phase1.monthlyData[key] || 0) + r.income;
+  });
+  
+  // 计算可用月份
+  const monthsWithData = Object.values(phase1.monthlyData).filter(v => v > 0).length;
+  const daysWithData = Object.values(phase1.dailyData).filter(v => v > 0).length;
+  
+  phase1.availableYears = phase2.months
+    .map(m => parseInt(m.key.split('-')[0]))
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .sort((a, b) => a - b);
+  
+  phase1.availableMonths = phase2.months.map(m => m.key);
+  phase1.dailyDates = Object.keys(phase1.dailyData).sort();
+  
+  const curMonthKey = `${phase1.curYear}-${p(phase1.curMonth)}`;
+  const lastMonthKey = phase1.curMonth === 1 ? `${phase1.curYear - 1}-12` : `${phase1.curYear}-${p(phase1.curMonth - 1)}`;
+  
+  phase1.allShops = ALL_SHOPS;
+  phase1.summary = {
+    today: phase1.dailyData[phase1.today] || 0,
+    currentMonth: phase1.monthlyData[curMonthKey] || 0,
+    currentYear: 0,
+    lastMonthKey,
+    lastYear: String(phase1.curYear - 1),
+  };
+  phase1.apiStatus = { tokenOk: true, monthsWithData, daysWithData };
+  
+  // 后台处理阶段3
+  phase3Promise.then(phase3 => {
+    phase1.yearlyData = {};
+    phase3.yearR.forEach(r => {
+      const key = r.settleDate.slice(0, 4);
+      phase1.yearlyData[key] = (phase1.yearlyData[key] || 0) + r.income;
+    });
+    
+    // 更新年度汇总
+    phase1.summary.currentYear = phase1.yearlyData[String(phase1.curYear)] || 0;
+    
+    // 转换为万元
+    Object.keys(phase1.yearlyData).forEach(k => phase1.yearlyData[k] /= 10000);
+    
+    // 如果页面已渲染，更新图表
+    if (chartLine) {
+      renderCharts();
+    }
+  });
+  
+  // 转换为万元
+  Object.keys(phase1.dailyData).forEach(k => phase1.dailyData[k] /= 10000);
+  Object.keys(phase1.monthlyData).forEach(k => phase1.monthlyData[k] /= 10000);
+  
+  return phase1;
+}
+
+function updateProgress(percent, text) {
+  loadProgress = percent;
+  const bar = document.getElementById('loading-progress-bar');
+  const status = document.getElementById('loading-status');
+  if (bar) bar.style.width = percent + '%';
+  if (status) status.textContent = text;
+}
+
 // ════════ 工具函数 ════════
-const fmt = v => (!v&&v!==0)?'—':(Math.abs(v)<0.01?'0.00':v.toFixed(2));
-const fmtP = p => (p===null||p===undefined)?'—':((p>=0?'+':'')+p.toFixed(1)+'%');
-const clsUp = v => v===null?'':(v>=0?'c-up':'c-down');
-const sign  = v => v===null?'':(v>=0?'▲':'▼');
-const calcChange = (a,b) => {
-  if(!a&&!b) return {diff:null,pct:null};
-  if(!b) return {diff:a,pct:null};
-  if(!a) return {diff:-b,pct:-100};
-  return {diff:a-b,pct:(a-b)/b*100};
+const fmt = v => (!v && v !== 0) ? '—' : (Math.abs(v) < 0.01 ? '0.00' : v.toFixed(2));
+const fmtP = p => (p === null || p === undefined) ? '—' : ((p >= 0 ? '+' : '') + p.toFixed(1) + '%');
+const clsUp = v => v === null ? '' : (v >= 0 ? 'c-up' : 'c-down');
+const sign  = v => v === null ? '' : (v >= 0 ? '▲' : '▼');
+const calcChange = (a, b) => {
+  if (!a && !b) return { diff: null, pct: null };
+  if (!b) return { diff: a, pct: null };
+  if (!a) return { diff: -b, pct: -100 };
+  return { diff: a - b, pct: (a - b) / b * 100 };
 };
-const prevYearDate = d => { const x=new Date(d); x.setFullYear(x.getFullYear()-1); return x.toISOString().slice(0,10); };
+const prevYearDate = d => { const x = new Date(d); x.setFullYear(x.getFullYear() - 1); return x.toISOString().slice(0, 10); };
 
 // ════════ 初始化选择器 ════════
 function initSelectors() {
-  const curYear = DATA?.curYear||new Date().getFullYear();
-  const curMonth = DATA?.curMonth||(new Date().getMonth()+1);
-  const today = DATA?.today||new Date().toISOString().slice(0,10);
+  const curYear = DATA?.curYear || new Date().getFullYear();
+  const curMonth = DATA?.curMonth || (new Date().getMonth() + 1);
+  const today = DATA?.today || new Date().toISOString().slice(0, 10);
 
-  const years = DATA?.availableYears||[curYear];
-  const yearOpts = years.slice().reverse().map(y=>`<option value="${y}">${y}</option>`).join('');
-  ['selYearA','selYearB','selYearOnly','selYearPrev'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=yearOpts;});
+  const years = DATA?.availableYears || [curYear];
+  const yearOpts = years.slice().reverse().map(y => `<option value="${y}">${y}</option>`).join('');
+  ['selYearA', 'selYearB', 'selYearOnly', 'selYearPrev'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = yearOpts; });
 
-  const monthOpts = MONTH_NAMES.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
+  const monthOpts = MONTH_NAMES.map((m, i) => `<option value="${i + 1}">${m}</option>`).join('');
   document.getElementById('selMonthA').innerHTML = monthOpts;
   document.getElementById('selMonthB').innerHTML = monthOpts;
 
-  const latestYear = years[years.length-1]||curYear;
-  STATE.yearA=latestYear; STATE.yearB=latestYear-1;
-  STATE.yearOnly=latestYear; STATE.yearPrev=latestYear-1;
-  STATE.monthA=curMonth; STATE.monthB=curMonth===1?12:curMonth-1;
-  document.getElementById('selYearA').value=STATE.yearA;
-  document.getElementById('selYearB').value=STATE.yearB;
-  document.getElementById('selYearOnly').value=STATE.yearOnly;
-  document.getElementById('selYearPrev').value=STATE.yearPrev;
-  document.getElementById('selMonthA').value=STATE.monthA;
-  document.getElementById('selMonthB').value=STATE.monthB;
+  const latestYear = years[years.length - 1] || curYear;
+  STATE.yearA = latestYear; STATE.yearB = latestYear - 1;
+  STATE.yearOnly = latestYear; STATE.yearPrev = latestYear - 1;
+  STATE.monthA = curMonth; STATE.monthB = curMonth === 1 ? 12 : curMonth - 1;
+  document.getElementById('selYearA').value = STATE.yearA;
+  document.getElementById('selYearB').value = STATE.yearB;
+  document.getElementById('selYearOnly').value = STATE.yearOnly;
+  document.getElementById('selYearPrev').value = STATE.yearPrev;
+  document.getElementById('selMonthA').value = STATE.monthA;
+  document.getElementById('selMonthB').value = STATE.monthB;
 
-  const maxDate = DATA?.dailyDates?DATA.dailyDates[DATA.dailyDates.length-1]:today;
-  document.getElementById('dateA').value=today; document.getElementById('dateA').max=maxDate;
+  const maxDate = DATA?.dailyDates ? DATA.dailyDates[DATA.dailyDates.length - 1] : today;
+  document.getElementById('dateA').value = today; document.getElementById('dateA').max = maxDate;
   const prevD = prevYearDate(today);
-  document.getElementById('dateB').value=prevD; document.getElementById('dateB').max=maxDate;
-  STATE.dateA=today; STATE.dateB=prevD;
+  document.getElementById('dateB').value = prevD; document.getElementById('dateB').max = maxDate;
+  STATE.dateA = today; STATE.dateB = prevD;
 
   // 区域选项
-  const regions = [...new Set(ALL_SHOPS.map(s=>s.region))].sort((a,b)=>{
-    const ai=REGION_ORDER.indexOf(a),bi=REGION_ORDER.indexOf(b);
-    return (ai===-1?9:ai)-(bi===-1?9:bi);
+  const regions = [...new Set(ALL_SHOPS.map(s => s.region))].sort((a, b) => {
+    const ai = REGION_ORDER.indexOf(a), bi = REGION_ORDER.indexOf(b);
+    return (ai === -1 ? 9 : ai) - (bi === -1 ? 9 : bi);
   });
-  const regSel=document.getElementById('selRegion');
-  regions.forEach(r=>regSel.appendChild(new Option(r+'区域',r)));
+  const regSel = document.getElementById('selRegion');
+  regions.forEach(r => regSel.appendChild(new Option(r + '区域', r)));
 
   // 门店选项
-  const shopSel=document.getElementById('selShop');
-  REGION_ORDER.forEach(region=>{
-    const shops=ALL_SHOPS.filter(s=>s.region===region);
-    if(shops.length>0){
-      const group=document.createElement('optgroup');
-      group.label=region+'区域';
-      shops.forEach(s=>group.appendChild(new Option(s.name,s.name)));
+  const shopSel = document.getElementById('selShop');
+  REGION_ORDER.forEach(region => {
+    const shops = ALL_SHOPS.filter(s => s.region === region);
+    if (shops.length > 0) {
+      const group = document.createElement('optgroup');
+      group.label = region + '区域';
+      shops.forEach(s => group.appendChild(new Option(s.name, s.name)));
       shopSel.appendChild(group);
     }
   });
 
   // 顶栏时间
-  if(DATA?.generatedAt){
-    const d=new Date(DATA.generatedAt);
-    document.getElementById('topbar-time').textContent='数据更新 '+d.toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+  if (DATA?.generatedAt) {
+    const d = new Date(DATA.generatedAt);
+    document.getElementById('topbar-time').textContent = '数据更新 ' + d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
   }
 
   bindEvents();
@@ -489,307 +638,491 @@ function initSelectors() {
 
 // ════════ 事件绑定 ════════
 function bindEvents() {
-  document.querySelectorAll('.dim-btn').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      document.querySelectorAll('.dim-btn').forEach(b=>b.classList.remove('btn-active'));
+  document.querySelectorAll('.dim-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.dim-btn').forEach(b => b.classList.remove('btn-active'));
       btn.classList.add('btn-active');
-      STATE.dim=btn.dataset.dim;
-      document.getElementById('ctrl-day').style.display   = STATE.dim==='day'   ?'':'none';
-      document.getElementById('ctrl-month').style.display = STATE.dim==='month' ?'':'none';
-      document.getElementById('ctrl-year').style.display   = STATE.dim==='year'  ?'':'none';
+      STATE.dim = btn.dataset.dim;
+      document.getElementById('ctrl-day').style.display   = STATE.dim === 'day'   ? '' : 'none';
+      document.getElementById('ctrl-month').style.display = STATE.dim === 'month' ? '' : 'none';
+      document.getElementById('ctrl-year').style.display   = STATE.dim === 'year'  ? '' : 'none';
       updateBSelector();
       render();
     });
   });
 
-  document.getElementById('selCompare').addEventListener('change',e=>{STATE.compare=e.target.value;updateBSelector();render();});
+  document.getElementById('selCompare').addEventListener('change', e => { STATE.compare = e.target.value; updateBSelector(); render(); });
 
-  document.getElementById('selDayCompare').addEventListener('change',e=>{
-    STATE.compare=e.target.value;
-    const isDod=STATE.compare==='dod';
-    document.getElementById('dateB').style.display=isDod?'':'none';
-    document.getElementById('lblDateB').style.display=isDod?'':'none';
-    if(!isDod){
-      const prev=prevYearDate(STATE.dateA);
-      document.getElementById('dateB').value=prev;
-      STATE.dateB=prev;
+  document.getElementById('selDayCompare').addEventListener('change', e => {
+    STATE.compare = e.target.value;
+    const isDod = STATE.compare === 'dod';
+    document.getElementById('dateB').style.display = isDod ? '' : 'none';
+    document.getElementById('lblDateB').style.display = isDod ? '' : 'none';
+    if (!isDod) {
+      const prev = prevYearDate(STATE.dateA);
+      document.getElementById('dateB').value = prev;
+      STATE.dateB = prev;
     }
     render();
   });
 
-  document.getElementById('selYearA').addEventListener('change',e=>{STATE.yearA=+e.target.value;updateBSelector();render();});
-  document.getElementById('selYearB').addEventListener('change',e=>{STATE.yearB=+e.target.value;render();});
-  document.getElementById('selMonthA').addEventListener('change',e=>{STATE.monthA=+e.target.value;updateBSelector();render();});
-  document.getElementById('selMonthB').addEventListener('change',e=>{STATE.monthB=+e.target.value;render();});
-  document.getElementById('selYearOnly').addEventListener('change',e=>{STATE.yearOnly=+e.target.value;render();});
-  document.getElementById('selYearPrev').addEventListener('change',e=>{STATE.yearPrev=+e.target.value;render();});
+  document.getElementById('selYearA').addEventListener('change', e => { STATE.yearA = +e.target.value; updateBSelector(); render(); });
+  document.getElementById('selYearB').addEventListener('change', e => { STATE.yearB = +e.target.value; render(); });
+  document.getElementById('selMonthA').addEventListener('change', e => { STATE.monthA = +e.target.value; updateBSelector(); render(); });
+  document.getElementById('selMonthB').addEventListener('change', e => { STATE.monthB = +e.target.value; render(); });
+  document.getElementById('selYearOnly').addEventListener('change', e => { STATE.yearOnly = +e.target.value; render(); });
+  document.getElementById('selYearPrev').addEventListener('change', e => { STATE.yearPrev = +e.target.value; render(); });
 
-  document.getElementById('dateA').addEventListener('change',e=>{
-    STATE.dateA=e.target.value;
-    if(STATE.compare==='yoy'){
-      const prev=prevYearDate(STATE.dateA);
-      document.getElementById('dateB').value=prev;
-      STATE.dateB=prev;
+  document.getElementById('dateA').addEventListener('change', e => {
+    STATE.dateA = e.target.value;
+    if (STATE.compare === 'yoy') {
+      const prev = prevYearDate(STATE.dateA);
+      document.getElementById('dateB').value = prev;
+      STATE.dateB = prev;
     }
     render();
   });
-  document.getElementById('dateB').addEventListener('change',e=>{STATE.dateB=e.target.value;render();});
+  document.getElementById('dateB').addEventListener('change', e => { STATE.dateB = e.target.value; render(); });
 
-  document.getElementById('selRegion').addEventListener('change',e=>{
-    STATE.region=e.target.value;
-    if(STATE.region){STATE.shop='';document.getElementById('selShop').value='';}
+  document.getElementById('selRegion').addEventListener('change', e => {
+    STATE.region = e.target.value;
+    if (STATE.region) { STATE.shop = ''; document.getElementById('selShop').value = ''; }
     render();
   });
 
-  document.getElementById('selShop').addEventListener('change',e=>{
-    STATE.shop=e.target.value;
-    if(STATE.shop){
-      const shopData=ALL_SHOPS.find(s=>s.name===STATE.shop);
-      if(shopData){STATE.region=shopData.region;document.getElementById('selRegion').value=STATE.region;}
+  document.getElementById('selShop').addEventListener('change', e => {
+    STATE.shop = e.target.value;
+    if (STATE.shop) {
+      const shopData = ALL_SHOPS.find(s => s.name === STATE.shop);
+      if (shopData) { STATE.region = shopData.region; document.getElementById('selRegion').value = STATE.region; }
     }
     render();
   });
 
-  document.getElementById('btnReset').addEventListener('click',()=>{
-    STATE.region=''; STATE.shop='';
-    document.getElementById('selRegion').value='';
-    document.getElementById('selShop').value='';
+  document.getElementById('btnReset').addEventListener('click', () => {
+    STATE.region = ''; STATE.shop = '';
+    document.getElementById('selRegion').value = '';
+    document.getElementById('selShop').value = '';
     render();
   });
 }
 
 function updateBSelector() {
-  if(STATE.dim!=='month') return;
-  const isYoy=STATE.compare==='yoy';
-  document.getElementById('selYearB').style.display=isYoy?'':'none';
-  document.getElementById('lblYearB').style.display=isYoy?'':'none';
-  document.getElementById('selMonthB').style.display=isYoy?'':'none';
-  if(isYoy){
-    document.getElementById('lblYearB').textContent=(STATE.yearA-1)+'年';
+  if (STATE.dim !== 'month') return;
+  const isYoy = STATE.compare === 'yoy';
+  document.getElementById('selYearB').style.display = isYoy ? '' : 'none';
+  document.getElementById('lblYearB').style.display = isYoy ? '' : 'none';
+  document.getElementById('selMonthB').style.display = isYoy ? '' : 'none';
+  if (isYoy) {
+    document.getElementById('lblYearB').textContent = (STATE.yearA - 1) + '年';
   } else {
-    STATE.yearB=STATE.monthA===1?STATE.yearA-1:STATE.yearA;
-    STATE.monthB=STATE.monthA===1?12:STATE.monthA-1;
-    document.getElementById('selYearB').value=STATE.yearB;
-    document.getElementById('selMonthB').value=STATE.monthB;
+    STATE.yearB = STATE.monthA === 1 ? STATE.yearA - 1 : STATE.yearA;
+    STATE.monthB = STATE.monthA === 1 ? 12 : STATE.monthA - 1;
+    document.getElementById('selYearB').value = STATE.yearB;
+    document.getElementById('selMonthB').value = STATE.monthB;
   }
 }
 
 // ════════ 渲染 ════════
 function getRevenue(shopName, isCurrent) {
-  const {monthlyData,dailyData,yearlyData}=DATA;
-  if(STATE.dim==='month'){
-    const y=isCurrent?STATE.yearA:STATE.yearB;
-    const m=isCurrent?STATE.monthA:STATE.monthB;
-    return monthlyData[`${y}-${p(m)}`]||0;
+  const { monthlyData, dailyData, yearlyData } = DATA;
+  if (STATE.dim === 'month') {
+    const y = isCurrent ? STATE.yearA : STATE.yearB;
+    const m = isCurrent ? STATE.monthA : STATE.monthB;
+    return monthlyData[`${y}-${p(m)}`] || 0;
   }
-  if(STATE.dim==='day') return dailyData[isCurrent?STATE.dateA:STATE.dateB]||0;
-  if(STATE.dim==='year') return yearlyData[String(isCurrent?STATE.yearOnly:STATE.yearPrev)]||0;
+  if (STATE.dim === 'day') return dailyData[isCurrent ? STATE.dateA : STATE.dateB] || 0;
+  if (STATE.dim === 'year') return yearlyData[String(isCurrent ? STATE.yearOnly : STATE.yearPrev)] || 0;
   return 0;
 }
 
 function render() {
-  if(!DATA) return;
+  if (!DATA) return;
 
-  let labelA='', labelB='', compareLabel='';
-  if(STATE.dim==='month'){
-    labelA=`${STATE.yearA}年${MONTH_NAMES[STATE.monthA-1]}`;
-    labelB=`${STATE.yearB}年${MONTH_NAMES[STATE.monthB-1]}`;
-    compareLabel=STATE.compare==='yoy'?'同比':'环比';
-  } else if(STATE.dim==='day'){
-    labelA=STATE.dateA;
-    labelB=STATE.compare==='yoy'?prevYearDate(STATE.dateA):STATE.dateB;
-    compareLabel=STATE.compare==='yoy'?'同比':'日对比';
+  let labelA = '', labelB = '', compareLabel = '';
+  if (STATE.dim === 'month') {
+    labelA = `${STATE.yearA}年${MONTH_NAMES[STATE.monthA - 1]}`;
+    labelB = `${STATE.yearB}年${MONTH_NAMES[STATE.monthB - 1]}`;
+    compareLabel = STATE.compare === 'yoy' ? '同比' : '环比';
+  } else if (STATE.dim === 'day') {
+    labelA = STATE.dateA;
+    labelB = STATE.compare === 'yoy' ? prevYearDate(STATE.dateA) : STATE.dateB;
+    compareLabel = STATE.compare === 'yoy' ? '同比' : '日对比';
   } else {
-    labelA=`${STATE.yearOnly}年`; labelB=`${STATE.yearPrev}年`; compareLabel='同比';
+    labelA = `${STATE.yearOnly}年`; labelB = `${STATE.yearPrev}年`; compareLabel = '同比';
   }
 
-  document.getElementById('th-a').textContent=labelA;
-  document.getElementById('th-b').textContent=labelB;
-  document.getElementById('table-badge').textContent=compareLabel;
-  document.getElementById('sc-label-a').textContent=labelA;
-  document.getElementById('sc-label-b').textContent=labelB;
+  document.getElementById('th-a').textContent = labelA;
+  document.getElementById('th-b').textContent = labelB;
+  document.getElementById('table-badge').textContent = compareLabel;
+  document.getElementById('sc-label-a').textContent = labelA;
+  document.getElementById('sc-label-b').textContent = labelB;
 
-  let shops=ALL_SHOPS.filter(s=>{
-    if(STATE.region&&s.region!==STATE.region) return false;
-    if(STATE.shop&&s.name!==STATE.shop) return false;
+  let shops = ALL_SHOPS.filter(s => {
+    if (STATE.region && s.region !== STATE.region) return false;
+    if (STATE.shop && s.name !== STATE.shop) return false;
     return true;
   });
 
-  const revA=getRevenue(null,true), revB=getRevenue(null,false);
-  const change=calcChange(revA,revB);
+  const revA = getRevenue(null, true), revB = getRevenue(null, false);
+  const change = calcChange(revA, revB);
 
-  document.getElementById('sc-val-a').textContent=revA>0?revA.toFixed(2)+'万':'—';
-  document.getElementById('sc-val-b').textContent=revB>0?revB.toFixed(2)+'万':'—';
-  document.getElementById('sc-val-a').className='val'+(revA>revB?' up':revA<revB?' down':'');
+  document.getElementById('sc-val-a').textContent = revA > 0 ? revA.toFixed(2) + '万' : '—';
+  document.getElementById('sc-val-b').textContent = revB > 0 ? revB.toFixed(2) + '万' : '—';
+  document.getElementById('sc-val-a').className = 'val' + (revA > revB ? ' up' : revA < revB ? ' down' : '');
 
-  if(change.diff!==null){
-    document.getElementById('sc-diff').textContent=sign(change.diff)+Math.abs(change.diff).toFixed(2)+'万';
-    document.getElementById('sc-diff').className='val '+(change.diff>=0?'up':'down');
-    document.getElementById('sc-diff-sub').textContent='较对比期';
+  if (change.diff !== null) {
+    document.getElementById('sc-diff').textContent = sign(change.diff) + Math.abs(change.diff).toFixed(2) + '万';
+    document.getElementById('sc-diff').className = 'val ' + (change.diff >= 0 ? 'up' : 'down');
+    document.getElementById('sc-diff-sub').textContent = '较对比期';
   } else {
-    document.getElementById('sc-diff').textContent='—';
-    document.getElementById('sc-diff').className='val';
-    document.getElementById('sc-diff-sub').textContent='';
+    document.getElementById('sc-diff').textContent = '—';
+    document.getElementById('sc-diff').className = 'val';
+    document.getElementById('sc-diff-sub').textContent = '';
   }
 
-  if(change.pct!==null){
-    const up=change.pct>=0;
-    document.getElementById('sc-pct').textContent=sign(change.pct)+Math.abs(change.pct).toFixed(1)+'%';
-    document.getElementById('sc-pct').className='val '+(up?'up':'down');
-    document.getElementById('sc-pct-sub').textContent=compareLabel+(up?'上升':'下降');
-    document.getElementById('sc-pct-sub').className='comp '+(up?'up':'down');
+  if (change.pct !== null) {
+    const up = change.pct >= 0;
+    document.getElementById('sc-pct').textContent = sign(change.pct) + Math.abs(change.pct).toFixed(1) + '%';
+    document.getElementById('sc-pct').className = 'val ' + (up ? 'up' : 'down');
+    document.getElementById('sc-pct-sub').textContent = compareLabel + (up ? '上升' : '下降');
+    document.getElementById('sc-pct-sub').className = 'comp ' + (up ? 'up' : 'down');
   } else {
-    document.getElementById('sc-pct').textContent='—';
-    document.getElementById('sc-pct').className='val';
-    document.getElementById('sc-pct-sub').textContent='';
-    document.getElementById('sc-pct-sub').className='comp';
+    document.getElementById('sc-pct').textContent = '—';
+    document.getElementById('sc-pct').className = 'val';
+    document.getElementById('sc-pct-sub').textContent = '';
+    document.getElementById('sc-pct-sub').className = 'comp';
   }
 
-  const title=STATE.shop?STATE.shop:(STATE.region?STATE.region+'区域':'全部门店');
-  document.getElementById('table-title').textContent=title+' 经营数据';
-  document.getElementById('table-meta').textContent=`共 ${shops.length} 家门店`;
+  const title = STATE.shop ? STATE.shop : (STATE.region ? STATE.region + '区域' : '全部门店');
+  document.getElementById('table-title').textContent = title + ' 经营数据';
+  document.getElementById('table-meta').textContent = `共 ${shops.length} 家门店`;
 
   renderTable(shops);
   renderCharts();
 }
 
 function renderTable(shops) {
-  const tbody=document.getElementById('tbody');
-  tbody.innerHTML='';
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
 
-  if(shops.length===0){
-    tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><div class="icon">📊</div><p>当前条件下无数据</p><p style="font-size:12px">请确认收银系统已上线并有营业数据</p></div></td></tr>';
+  if (shops.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="icon">📊</div><p>当前条件下无数据</p><p style="font-size:12px">请确认收银系统已上线并有营业数据</p></div></td></tr>';
     return;
   }
 
-  const grouped={};
-  REGION_ORDER.forEach(r=>{grouped[r]=[];});
-  shops.forEach(s=>grouped[s.region].push(s));
-  let grandA=0, grandB=0;
+  const grouped = {};
+  REGION_ORDER.forEach(r => { grouped[r] = []; });
+  shops.forEach(s => grouped[s.region].push(s));
+  let grandA = 0, grandB = 0;
 
-  REGION_ORDER.forEach(region=>{
-    const list=grouped[region];
-    if(!list||list.length===0) return;
-    let regA=0, regB=0;
+  REGION_ORDER.forEach(region => {
+    const list = grouped[region];
+    if (!list || list.length === 0) return;
+    let regA = 0, regB = 0;
 
-    list.forEach((shop,idx)=>{
-      const sA=getRevenue(shop.name,true), sB=getRevenue(shop.name,false);
-      regA+=sA; regB+=sB; grandA+=sA; grandB+=sB;
-      const ch=calcChange(sA,sB);
-      const tr=document.createElement('tr');
-      tr.innerHTML=`
-        ${idx===0?`<td class="c-name" rowspan="${list.length}">${region}</td>`:''}
+    list.forEach((shop, idx) => {
+      const sA = getRevenue(shop.name, true), sB = getRevenue(shop.name, false);
+      regA += sA; regB += sB; grandA += sA; grandB += sB;
+      const ch = calcChange(sA, sB);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        ${idx === 0 ? `<td class="c-name" rowspan="${list.length}">${region}</td>` : ''}
         <td class="c-name">${shop.name}</td>
         <td class="c-num">${fmt(sA)}</td>
         <td class="c-num">${fmt(sB)}</td>
-        <td class="c-num ${clsUp(ch.diff)}">${ch.diff!==null?sign(ch.diff)+Math.abs(ch.diff).toFixed(2):'<span class="c-na">—</span>'}</td>
-        <td class="c-pct ${clsUp(ch.pct)}">${ch.pct!==null?sign(ch.pct)+Math.abs(ch.pct).toFixed(1)+'%':'<span class="c-na">—</span>'}</td>`;
+        <td class="c-num ${clsUp(ch.diff)}">${ch.diff !== null ? sign(ch.diff) + Math.abs(ch.diff).toFixed(2) : '<span class="c-na">—</span>'}</td>
+        <td class="c-pct ${clsUp(ch.pct)}">${ch.pct !== null ? sign(ch.pct) + Math.abs(ch.pct).toFixed(1) + '%' : '<span class="c-na">—</span>'}</td>`;
       tbody.appendChild(tr);
     });
 
-    const regCh=calcChange(regA,regB);
-    const st=document.createElement('tr'); st.className='subtot';
-    st.innerHTML=`
+    const regCh = calcChange(regA, regB);
+    const st = document.createElement('tr'); st.className = 'subtot';
+    st.innerHTML = `
       <td class="c-name" colspan="2">${region} 合计</td>
       <td class="c-num">${fmt(regA)}</td>
       <td class="c-num">${fmt(regB)}</td>
-      <td class="c-num ${clsUp(regCh.diff)}">${regCh.diff!==null?sign(regCh.diff)+Math.abs(regCh.diff).toFixed(2):'<span class="c-na">—</span>'}</td>
-      <td class="c-pct ${clsUp(regCh.pct)}">${regCh.pct!==null?sign(regCh.pct)+Math.abs(regCh.pct).toFixed(1)+'%':'<span class="c-na">—</span>'}</td>`;
+      <td class="c-num ${clsUp(regCh.diff)}">${regCh.diff !== null ? sign(regCh.diff) + Math.abs(regCh.diff).toFixed(2) : '<span class="c-na">—</span>'}</td>
+      <td class="c-pct ${clsUp(regCh.pct)}">${regCh.pct !== null ? sign(regCh.pct) + Math.abs(regCh.pct).toFixed(1) + '%' : '<span class="c-na">—</span>'}</td>`;
     tbody.appendChild(st);
   });
 
-  const grandCh=calcChange(grandA,grandB);
-  const gt=document.createElement('tr'); gt.className='grandtot';
-  gt.innerHTML=`
+  const grandCh = calcChange(grandA, grandB);
+  const gt = document.createElement('tr'); gt.className = 'grandtot';
+  gt.innerHTML = `
     <td class="c-name" colspan="2">全部合计</td>
     <td class="c-num">${fmt(grandA)}</td>
     <td class="c-num">${fmt(grandB)}</td>
-    <td class="c-num ${clsUp(grandCh.diff)}">${grandCh.diff!==null?sign(grandCh.diff)+Math.abs(grandCh.diff).toFixed(2):'<span class="c-na">—</span>'}</td>
-    <td class="c-pct ${clsUp(grandCh.pct)}">${grandCh.pct!==null?sign(grandCh.pct)+Math.abs(grandCh.pct).toFixed(1)+'%':'<span class="c-na">—</span>'}</td>`;
+    <td class="c-num ${clsUp(grandCh.diff)}">${grandCh.diff !== null ? sign(grandCh.diff) + Math.abs(grandCh.diff).toFixed(2) : '<span class="c-na">—</span>'}</td>
+    <td class="c-pct ${clsUp(grandCh.pct)}">${grandCh.pct !== null ? sign(grandCh.pct) + Math.abs(grandCh.pct).toFixed(1) + '%' : '<span class="c-na">—</span>'}</td>`;
   tbody.appendChild(gt);
 }
 
 function renderCharts() {
-  if(chartBar) chartBar.destroy();
-  if(chartLine) chartLine.destroy();
+  if (chartBar) chartBar.destroy();
+  if (chartLine) chartLine.destroy();
 
-  let labelA='', labelB='', compareLabel='';
-  if(STATE.dim==='month'){
-    labelA=`${STATE.yearA}年${MONTH_NAMES[STATE.monthA-1]}`;
-    labelB=`${STATE.yearB}年${MONTH_NAMES[STATE.monthB-1]}`;
-    compareLabel=STATE.compare==='yoy'?'同比':'环比';
-  } else if(STATE.dim==='day'){
-    labelA=STATE.dateA;
-    labelB=STATE.compare==='yoy'?prevYearDate(STATE.dateA):STATE.dateB;
-    compareLabel=STATE.compare==='yoy'?'同比':'日对比';
+  let labelA = '', labelB = '', compareLabel = '';
+  if (STATE.dim === 'month') {
+    labelA = `${STATE.yearA}年${MONTH_NAMES[STATE.monthA - 1]}`;
+    labelB = `${STATE.yearB}年${MONTH_NAMES[STATE.monthB - 1]}`;
+    compareLabel = STATE.compare === 'yoy' ? '同比' : '环比';
+  } else if (STATE.dim === 'day') {
+    labelA = STATE.dateA;
+    labelB = STATE.compare === 'yoy' ? prevYearDate(STATE.dateA) : STATE.dateB;
+    compareLabel = STATE.compare === 'yoy' ? '同比' : '日对比';
   } else {
-    labelA=`${STATE.yearOnly}年`; labelB=`${STATE.yearPrev}年`; compareLabel='同比';
+    labelA = `${STATE.yearOnly}年`; labelB = `${STATE.yearPrev}年`; compareLabel = '同比';
   }
 
-  const revA=getRevenue(null,true), revB=getRevenue(null,false);
-  const ctxBar=document.getElementById('chartBar').getContext('2d');
-  chartBar=new Chart(ctxBar,{
-    type:'bar',
-    data:{
-      labels:[labelA,labelB],
-      datasets:[{label:'营收（万元）',data:[revA||0,revB||0],
-        backgroundColor:[revA>=revB?'rgba(192,57,43,0.85)':'rgba(39,174,96,0.85)','rgba(100,100,130,0.5)'],
-        borderColor:[revA>=revB?'#c0392b':'#27ae60','#646482'],
-        borderWidth:1,borderRadius:6}]
+  const revA = getRevenue(null, true), revB = getRevenue(null, false);
+  const ctxBar = document.getElementById('chartBar').getContext('2d');
+  chartBar = new Chart(ctxBar, {
+    type: 'bar',
+    data: {
+      labels: [labelA, labelB],
+      datasets: [{ label: '营收（万元）', data: [revA || 0, revB || 0],
+        backgroundColor: [revA >= revB ? 'rgba(192,57,43,0.85)' : 'rgba(39,174,96,0.85)', 'rgba(100,100,130,0.5)'],
+        borderColor: [revA >= revB ? '#c0392b' : '#27ae60', '#646482'],
+        borderWidth: 1, borderRadius: 6 }]
     },
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.parsed.y.toFixed(2)} 万元`}}},
-      scales:{y:{beginAtZero:true,title:{display:true,text:'万元'},grid:{color:'#f0f0f0'}},x:{grid:{display:false}}}}
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y.toFixed(2)} 万元` } } },
+      scales: { y: { beginAtZero: true, title: { display: true, text: '万元' }, grid: { color: '#f0f0f0' } }, x: { grid: { display: false } } } }
   });
 
-  const entries=Object.entries(DATA.monthlyData||{}).sort((a,b)=>a[0].localeCompare(b[0])).slice(-12);
-  const labels12=entries.map(([k])=>{const[y,m]=k.split('-');return`${y}年${m}月`;});
-  const values12=entries.map(([,v])=>v||0);
-  const ctxLine=document.getElementById('chartLine').getContext('2d');
-  chartLine=new Chart(ctxLine,{
-    type:'line',
-    data:{labels:labels12,datasets:[{label:'月营收（万元）',data:values12,
-      borderColor:'#c0392b',backgroundColor:'rgba(192,57,43,0.1)',
-      borderWidth:2,fill:true,tension:0.3,pointRadius:4,pointBackgroundColor:'#c0392b'}]},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.parsed.y.toFixed(2)} 万元`}}},
-      scales:{y:{beginAtZero:true,title:{display:true,text:'万元'},grid:{color:'#f0f0f0'}},x:{grid:{display:false}}}}
+  const entries = Object.entries(DATA.monthlyData || {}).sort((a, b) => a[0].localeCompare(b[0])).slice(-12);
+  const labels12 = entries.map(([k]) => { const [y, m] = k.split('-'); return `${y}年${m}月`; });
+  const values12 = entries.map(([, v]) => v || 0);
+  const ctxLine = document.getElementById('chartLine').getContext('2d');
+  chartLine = new Chart(ctxLine, {
+    type: 'line',
+    data: { labels: labels12, datasets: [{ label: '月营收（万元）', data: values12,
+      borderColor: '#c0392b', backgroundColor: 'rgba(192,57,43,0.1)',
+      borderWidth: 2, fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#c0392b' }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y.toFixed(2)} 万元` } } },
+      scales: { y: { beginAtZero: true, title: { display: true, text: '万元' }, grid: { color: '#f0f0f0' } }, x: { grid: { display: false } } } }
   });
+}
+
+// ═══════════════════════════════════════════════════════
+// 导出功能
+// ═══════════════════════════════════════════════════════
+
+// 导出表格为 CSV
+function exportTable() {
+  if (!DATA) {
+    alert('暂无数据可导出');
+    return;
+  }
+  
+  const title = STATE.shop ? STATE.shop : (STATE.region ? STATE.region + '区域' : '全部门店');
+  let labelA = '', labelB = '', compareLabel = '';
+  if (STATE.dim === 'month') {
+    labelA = `${STATE.yearA}年${MONTH_NAMES[STATE.monthA - 1]}`;
+    labelB = `${STATE.yearB}年${MONTH_NAMES[STATE.monthB - 1]}`;
+    compareLabel = STATE.compare === 'yoy' ? '同比' : '环比';
+  } else if (STATE.dim === 'day') {
+    labelA = STATE.dateA;
+    labelB = STATE.compare === 'yoy' ? prevYearDate(STATE.dateA) : STATE.dateB;
+    compareLabel = STATE.compare === 'yoy' ? '同比' : '日对比';
+  } else {
+    labelA = `${STATE.yearOnly}年`; labelB = `${STATE.yearPrev}年`; compareLabel = '同比';
+  }
+  
+  let csv = '\uFEFF'; // BOM for Excel
+  csv += `徽商故里经营数据报表 - ${title}\n`;
+  csv += `对比维度: ${compareLabel}\n`;
+  csv += `生成时间: ${new Date().toLocaleString('zh-CN')}\n\n`;
+  
+  csv += '区域,门店,' + labelA + '营收(万元),' + labelB + '营收(万元),增减额(万元),增减幅(%)\n';
+  
+  const shops = ALL_SHOPS.filter(s => {
+    if (STATE.region && s.region !== STATE.region) return false;
+    if (STATE.shop && s.name !== STATE.shop) return false;
+    return true;
+  });
+  
+  const grouped = {};
+  REGION_ORDER.forEach(r => { grouped[r] = []; });
+  shops.forEach(s => grouped[s.region].push(s));
+  let grandA = 0, grandB = 0;
+  
+  REGION_ORDER.forEach(region => {
+    const list = grouped[region];
+    if (!list || list.length === 0) return;
+    let regA = 0, regB = 0;
+    
+    list.forEach(shop => {
+      const sA = getRevenue(shop.name, true), sB = getRevenue(shop.name, false);
+      regA += sA; regB += sB; grandA += sA; grandB += sB;
+      const ch = calcChange(sA, sB);
+      csv += `${region},${shop.name},${fmt(sA)},${fmt(sB)},${ch.diff !== null ? ch.diff.toFixed(2) : ''},${ch.pct !== null ? ch.pct.toFixed(1) : ''}\n`;
+    });
+    
+    const regCh = calcChange(regA, regB);
+    csv += `${region}合计,,${fmt(regA)},${fmt(regB)},${regCh.diff !== null ? regCh.diff.toFixed(2) : ''},${regCh.pct !== null ? regCh.pct.toFixed(1) : ''}\n`;
+  });
+  
+  const grandCh = calcChange(grandA, grandB);
+  csv += `全部合计,,${fmt(grandA)},${fmt(grandB)},${grandCh.diff !== null ? grandCh.diff.toFixed(2) : ''},${grandCh.pct !== null ? grandCh.pct.toFixed(1) : ''}\n`;
+  
+  // 图表数据
+  csv += '\n近12个月营收走势\n';
+  csv += '月份,营收(万元)\n';
+  const entries = Object.entries(DATA.monthlyData || {}).sort((a, b) => a[0].localeCompare(b[0])).slice(-12);
+  entries.forEach(([k, v]) => {
+    const [y, m] = k.split('-');
+    csv += `${y}年${m}月,${v.toFixed(2)}\n`;
+  });
+  
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `徽商故里_${title}_${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+}
+
+// 导出完整报告（含汇总信息）
+function exportFullReport() {
+  if (!DATA) {
+    alert('暂无数据可导出');
+    return;
+  }
+  
+  const title = STATE.shop ? STATE.shop : (STATE.region ? STATE.region + '区域' : '全部门店');
+  let labelA = '', labelB = '', compareLabel = '';
+  if (STATE.dim === 'month') {
+    labelA = `${STATE.yearA}年${MONTH_NAMES[STATE.monthA - 1]}`;
+    labelB = `${STATE.yearB}年${MONTH_NAMES[STATE.monthB - 1]}`;
+    compareLabel = STATE.compare === 'yoy' ? '同比' : '环比';
+  } else if (STATE.dim === 'day') {
+    labelA = STATE.dateA;
+    labelB = STATE.compare === 'yoy' ? prevYearDate(STATE.dateA) : STATE.dateB;
+    compareLabel = STATE.compare === 'yoy' ? '同比' : '日对比';
+  } else {
+    labelA = `${STATE.yearOnly}年`; labelB = `${STATE.yearPrev}年`; compareLabel = '同比';
+  }
+  
+  const revA = getRevenue(null, true), revB = getRevenue(null, false);
+  const change = calcChange(revA, revB);
+  
+  let csv = '\uFEFF';
+  csv += `徽商故里经营数据报告\n`;
+  csv += `═'.repeat(50) + '\n';
+  csv += `报告维度: ${compareLabel}\n`;
+  csv += `数据范围: ${title}\n`;
+  csv += `当期: ${labelA}\n`;
+  csv += `对比期: ${labelB}\n`;
+  csv += `生成时间: ${new Date().toLocaleString('zh-CN')}\n\n`;
+  
+  csv += `【汇总信息】\n`;
+  csv += `当期营收,${revA.toFixed(2)}万元\n`;
+  csv += `对比期营收,${revB.toFixed(2)}万元\n`;
+  csv += `增减额,${change.diff !== null ? change.diff.toFixed(2) + '万元' : '—'}\n`;
+  csv += `增减幅,${change.pct !== null ? change.pct.toFixed(1) + '%' : '—'}\n\n`;
+  
+  csv += `【各门店明细】\n`;
+  csv += '区域,门店,' + labelA + '营收(万元),' + labelB + '营收(万元),增减额(万元),增减幅(%)\n';
+  
+  const shops = ALL_SHOPS.filter(s => {
+    if (STATE.region && s.region !== STATE.region) return false;
+    if (STATE.shop && s.name !== STATE.shop) return false;
+    return true;
+  });
+  
+  const grouped = {};
+  REGION_ORDER.forEach(r => { grouped[r] = []; });
+  shops.forEach(s => grouped[s.region].push(s));
+  let grandA = 0, grandB = 0;
+  
+  REGION_ORDER.forEach(region => {
+    const list = grouped[region];
+    if (!list || list.length === 0) return;
+    let regA = 0, regB = 0;
+    
+    list.forEach(shop => {
+      const sA = getRevenue(shop.name, true), sB = getRevenue(shop.name, false);
+      regA += sA; regB += sB; grandA += sA; grandB += sB;
+      const ch = calcChange(sA, sB);
+      csv += `${region},${shop.name},${fmt(sA)},${fmt(sB)},${ch.diff !== null ? ch.diff.toFixed(2) : ''},${ch.pct !== null ? ch.pct.toFixed(1) : ''}\n`;
+    });
+    
+    const regCh = calcChange(regA, regB);
+    csv += `${region}合计,,${fmt(regA)},${fmt(regB)},${regCh.diff !== null ? regCh.diff.toFixed(2) : ''},${regCh.pct !== null ? regCh.pct.toFixed(1) : ''}\n`;
+  });
+  
+  const grandCh = calcChange(grandA, grandB);
+  csv += `全部合计,,${fmt(grandA)},${fmt(grandB)},${grandCh.diff !== null ? grandCh.diff.toFixed(2) : ''},${grandCh.pct !== null ? grandCh.pct.toFixed(1) : ''}\n`;
+  
+  csv += '\n【近12个月趋势】\n';
+  csv += '月份,营收(万元)\n';
+  const entries = Object.entries(DATA.monthlyData || {}).sort((a, b) => a[0].localeCompare(b[0])).slice(-12);
+  entries.forEach(([k, v]) => {
+    const [y, m] = k.split('-');
+    csv += `${y}年${m}月,${v.toFixed(2)}\n`;
+  });
+  
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `徽商故里_${title}_完整报告_${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+}
+
+// 导出图表为图片
+function exportChart(chartId) {
+  const canvas = document.getElementById(chartId);
+  if (!canvas) {
+    alert('图表不存在');
+    return;
+  }
+  
+  const link = document.createElement('a');
+  link.download = `${chartId === 'chartBar' ? '当期对比趋势' : '近12个月走势'}_${new Date().toISOString().slice(0, 10)}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
 }
 
 // ════════ 启动 ════════
 (async function main() {
   try {
     DATA = await loadAllData();
-  } catch(e) {
+  } catch (e) {
     console.error(e);
-    const el=document.getElementById('loading-status');
-    el.textContent='加载失败: '+e.message;
-    el.style.color='#e74c3c';
-    const nb=document.getElementById('notice-bar');
-    document.getElementById('notice-text').textContent='API 连接失败：'+e.message;
+    const el = document.getElementById('loading-status');
+    el.textContent = '加载失败: ' + e.message;
+    el.style.color = '#e74c3c';
+    const nb = document.getElementById('notice-bar');
+    document.getElementById('notice-text').textContent = 'API 连接失败：' + e.message;
     nb.classList.add('visible');
-    nb.style.background='#ffebee'; nb.style.borderColor='#ef5350'; nb.style.color='#c62828';
+    nb.style.background = '#ffebee'; nb.style.borderColor = '#ef5350'; nb.style.color = '#c62828';
     return;
   }
 
-  const {monthsWithData,daysWithData}=DATA.apiStatus;
-  const nb=document.getElementById('notice-bar');
-  const icon=document.getElementById('notice-icon');
-  const text=document.getElementById('notice-text');
+  const { monthsWithData, daysWithData } = DATA.apiStatus;
+  const nb = document.getElementById('notice-bar');
+  const icon = document.getElementById('notice-icon');
+  const text = document.getElementById('notice-text');
   nb.classList.add('visible');
 
-  if(monthsWithData===0&&daysWithData===0){
-    nb.style.background='#fff3cd'; nb.style.borderColor='#ffc107'; nb.style.color='#856404';
-    icon.textContent='ℹ️';
-    text.textContent='API 连接正常，但当前查询范围内（2025年6月至今）营收数据均为0。可能原因：① 收银系统6月才上线 ② 门店尚未开始营业 ③ 门店数据权限不足（需联系收银系统服务商开通）。';
+  if (monthsWithData === 0 && daysWithData === 0) {
+    nb.style.background = '#fff3cd'; nb.style.borderColor = '#ffc107'; nb.style.color = '#856404';
+    icon.textContent = 'ℹ️';
+    text.textContent = 'API 连接正常，但当前查询范围内（2025年6月至今）营收数据均为0。可能原因：① 收银系统6月才上线 ② 门店尚未开始营业 ③ 门店数据权限不足（需联系收银系统服务商开通）。';
   } else {
-    nb.style.background='#e8f5e9'; nb.style.borderColor='#4caf50'; nb.style.color='#2e7d32';
-    icon.textContent='✅';
-    text.textContent=`数据已加载：近30天 ${daysWithData} 天有数据，近12个月 ${monthsWithData} 个月有数据。红色▲=增长，绿色▼=下降。`;
+    nb.style.background = '#e8f5e9'; nb.style.borderColor = '#4caf50'; nb.style.color = '#2e7d32';
+    icon.textContent = '✅';
+    text.textContent = `数据已加载：近30天 ${daysWithData} 天有数据，近12个月 ${monthsWithData} 个月有数据。红色▲=增长，绿色▼=下降。`;
   }
 
-  document.getElementById('loading-mask').style.display='none';
+  document.getElementById('loading-mask').style.display = 'none';
+  
+  // 更新状态指示器
+  document.getElementById('status-dot').classList.remove('loading');
+  document.getElementById('status-text').textContent = '已加载';
+  
   initSelectors();
   render();
 })();
