@@ -364,12 +364,15 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
   const debugData = document.getElementById('debug-data');
   if (debugPanel && debugData) {
     const bd = json?.data?.List?.businessData ?? json?.data?.businessData ?? json?.data ?? {};
-    const fields = Object.keys(bd).filter(k => typeof bd[k] === 'number').map(k => `${k}: ${bd[k]}`).join(', ');
     debugPanel.style.display = 'block';
     debugData.innerHTML = `
       <b>类型：</b>${dateType} | <b>日期：</b>${settleDate}<br/>
-      <b style="color:#ff0">所有数字字段：</b>${fields || '无'}<br/>
-      <b>完整数据：</b>${JSON.stringify(bd, null, 2).slice(0, 600)}
+      <b>incomeTotal：</b>${bd.incomeTotal ?? '无'}<br/>
+      <b>income_total：</b>${bd.income_total ?? '无'}<br/>
+      <b>service_fee_income_money：</b>${bd.service_fee_income_money ?? '无'}<br/>
+      <b>last（实收）：</b>${bd.last ?? '无'}<br/>
+      <b>orig（应收）：</b>${bd.orig ?? '无'}<br/>
+      <b>所有字段：</b>${JSON.stringify(bd).slice(0, 800)}
     `;
   }
 
