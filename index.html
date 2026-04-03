@@ -486,12 +486,19 @@ async function loadAllData() {
   ALL_SHOPS.forEach(s => { shopDailyData[s.centerId] = {}; days.forEach(d => { shopDailyData[s.centerId][d] = 0; }); });
   
   dayResults.forEach(r => {
+    // 调试：检查数据结构
     if (r?.income !== undefined && r?.settleDate && r?.shopId) {
       dailyData[r.settleDate] = (dailyData[r.settleDate] || 0) + r.income;
       // 保存各门店独立数据（使用 shopId 匹配）
       if (shopDailyData[r.shopId]) {
         shopDailyData[r.shopId][r.settleDate] = r.income;
+      } else {
+        // 调试：输出未匹配的 shopId
+        console.log('未匹配 shopId:', r.shopId, '可用键:', Object.keys(shopDailyData));
       }
+    } else {
+      // 调试：输出被跳过的记录
+      console.log('跳过记录:', { income: r?.income, settleDate: r?.settleDate, shopId: r?.shopId });
     }
   });
   
