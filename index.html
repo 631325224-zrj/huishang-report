@@ -97,6 +97,10 @@ canvas { display: block; }
 <body>
 
 <div id="loading-mask">
+<div id="debug-panel" style="position:fixed;bottom:10px;left:10px;background:#1a1a2e;color:#0f0;font-size:11px;padding:10px;border-radius:8px;max-width:400px;z-index:10000;display:none;font-family:monospace;line-height:1.6;">
+  <b style="color:#ff0">🔍 API 原始数据：</b><br/>
+  <span id="debug-data"></span>
+</div>
   <div class="spinner"></div>
   <div class="loading-text" id="loading-title">正在拉取收银系统数据…</div>
   <div class="loading-sub" id="loading-status">连接收银系统 API</div>
@@ -357,7 +361,21 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
   
   // 调试：记录原始返回数据（仅在总部查询时打印）
   if (centerId === API_CONFIG.centerId) {
-    console.log(`API [${dateType}] ${settleDate}:`, JSON.stringify(json, null, 2).slice(0, 500));
+    // console.log(`API [${dateType}] ${settleDate}:`, JSON.stringify(json, null, 2).slice(0, 500));
+    // 显示在页面调试面板
+    const debugPanel = document.getElementById('debug-panel');
+    const debugData = document.getElementById('debug-data');
+    if (debugPanel && debugData) {
+      const incomeField = json?.data?.List?.businessData?.income ?? json?.data?.businessData?.income ?? json?.data?.income;
+      const origField = json?.data?.List?.businessData?.orig ?? json?.data?.businessData?.orig ?? json?.data?.orig;
+      debugPanel.style.display = 'block';
+      debugData.innerHTML = `
+        <b>类型：</b>${dateType} | <b>日期：</b>${settleDate}<br/>
+        <b style="color:#0f0">income（纯收）：</b>${incomeField ?? '无此字段'}<br/>
+        <b style="color:#f0f">orig（营收）：</b>${origField ?? '无此字段'}<br/>
+        <b>完整数据：</b>${JSON.stringify(json?.data ?? {}, null, 2).slice(0, 300)}...
+      `;
+    }
   }
   
   // 提取纯收金额数据 - 使用 income 字段（纯收金额）
