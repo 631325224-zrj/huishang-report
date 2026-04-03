@@ -344,10 +344,21 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
   });
   const json = await res.json();
   
-  // 提取营收数据
+  // 调试：记录原始返回数据
+  console.log(`API [${dateType}] ${settleDate}:`, JSON.stringify(json, null, 2).slice(0, 500));
+  
+  // 提取营收数据 - 尝试多种可能的返回格式
   let income = 0;
   if (json?.data?.List?.income) {
     income = parseFloat(json.data.List.income.incomeTotal) || 0;
+  } else if (json?.data?.incomeTotal) {
+    income = parseFloat(json.data.incomeTotal) || 0;
+  } else if (json?.incomeTotal) {
+    income = parseFloat(json.incomeTotal) || 0;
+  } else if (json?.data?.income) {
+    income = parseFloat(json.data.income) || 0;
+  } else if (json?.income) {
+    income = parseFloat(json.income) || 0;
   }
   
   SHOP_DATA_CACHE[cacheKey] = { settleDate, dateType, centerId, shopId, income, raw: json };
