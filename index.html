@@ -306,11 +306,28 @@ const SHOP_DATA_CACHE = {};
 // ════════ API 层 ════════
 const p = n => String(n).padStart(2,'0');
 
-async function getToken() {
-  const url = `${API_CONFIG.baseUrl}/auth/accesstoken?appid=${API_CONFIG.appId}&accessid=${API_CONFIG.accessId}&response_type=token`;
-  const res = await fetch(url, {method:'POST'});
-  const json = await res.json();
-  return json.access_token || null;
+async function getToken(retryCount = 0) {
+  try {
+    const url = `${API_CONFIG.baseUrl}/auth/accesstoken?appid=${API_CONFIG.appId}&accessid=${API_CONFIG.accessId}&response_type=token`;
+    const res = await fetch(url, {method:'POST'});
+    const json = await res.json();
+    if (json.access_token) {
+      return json.access_token;
+    }
+    // token 为空，重试
+    if (retryCount < 2) {
+      await new Promise(r => setTimeout(r, 1000));
+      return getToken(retryCount + 1);
+    }
+    return null;
+  } catch (err) {
+    console.error('获取Token失败:', err);
+    if (retryCount < 2) {
+      await new Promise(r => setTimeout(r, 2000));
+      return getToken(retryCount + 1);
+    }
+    return null;
+  }
 }
 
 // 查询单个日期的数据
@@ -362,22 +379,24 @@ function updateProgress(percent, text) {
 
 // ═══════════════════════════════════════════════════════
 // 优化的加载策略：分阶段加载
-// 阶段1：只加载总部的汇总数据（今日、本月、近12月）
-// 阶段2：后台异步加载各门店明细数据
+// 阶段1：只加载今天 + 近30天（最快可见）
+// 阶段2：后台异步加载近12个月数据
 // ═══════════════════════════════════════════════════════
 
 async function loadAllData() {
   updateProgress(5, '获取访问凭证…');
   token = await getToken();
-  if (!token) throw new Error('无法获取 API Token');
+  if (!token) {
+    throw new Error('无法获取 API Token，请检查网络连接后刷新重试');
+  }
   
   const now = new Date();
   const curYear = now.getFullYear();
   const curMonth = now.getMonth() + 1;
   const today = `${curYear}-${p(curMonth)}-${p(now.getDate())}`;
   
-  // ========== 阶段1: 快速加载总部汇总数据 (只用1个请求) ==========
-  updateProgress(15, '加载总部汇总数据…');
+  // ========== 阶段1: 只加载今天 + 近30天 ==========
+  updateProgress(15, '加载今日数据…');
   
   // 生成近30天日期
   const days = [];
@@ -397,49 +416,62 @@ async function loadAllData() {
     months.push({ key: `${y}-${p(m)}`, settleDate: `${y}-${p(m)}-01` });
   }
   
-  // 生成近12年数据（年度汇总）
+  // 生成年度数据
   const years = [];
   for (let y = API_CONFIG.onlineYear; y <= curYear; y++) {
     years.push({ key: String(y), settleDate: `${y}-01-01` });
   }
   
-  // 用总部 ID 查询所有日期的数据（合并请求）
+  // 查询日数据
   updateProgress(25, '查询日数据…');
   const dayTasks = days.map(d => () => queryRevenue(d, 'day', API_CONFIG.centerId, API_CONFIG.centerId));
-  const dayResults = await batchQuery(dayTasks, 20, p => updateProgress(25 + p * 0.4, `日数据 ${p}%…`));
+  const dayResults = await batchQuery(dayTasks, 15, p => updateProgress(25 + p * 0.5, `日数据 ${p}%…`));
   
-  updateProgress(65, '查询月数据…');
-  const monthTasks = months.map(m => () => queryRevenue(m.settleDate, 'month', API_CONFIG.centerId, API_CONFIG.centerId));
-  const monthResults = await batchQuery(monthTasks, 20, p => updateProgress(65 + p * 0.25, `月数据 ${p}%…`));
-  
-  updateProgress(90, '查询年数据…');
-  const yearTasks = years.map(y => () => queryRevenue(y.settleDate, 'year', API_CONFIG.centerId, API_CONFIG.centerId));
-  const yearResults = await batchQuery(yearTasks, 20, p => updateProgress(90 + p * 0.1, `年数据 ${p}%…`));
-  
-  // 汇总数据
+  // 汇总日数据
   const dailyData = {};
-  const monthlyData = {};
-  const yearlyData = {};
-  
   dayResults.forEach(r => {
     if (r?.income) dailyData[r.settleDate] = r.income / 10000;
   });
   
-  monthResults.forEach(r => {
-    if (r?.income) {
-      const key = r.settleDate.slice(0, 7);
-      monthlyData[key] = r.income / 10000;
-    }
-  });
+  // 初始化月年和年数据（后续异步加载）
+  const monthlyData = {};
+  const yearlyData = {};
   
-  yearResults.forEach(r => {
-    if (r?.income) {
-      const key = r.settleDate.slice(0, 4);
-      yearlyData[key] = r.income / 10000;
+  // 后台加载月数据（不阻塞）
+  setTimeout(async () => {
+    try {
+      updateProgress(75, '查询月数据…');
+      const monthTasks = months.map(m => () => queryRevenue(m.settleDate, 'month', API_CONFIG.centerId, API_CONFIG.centerId));
+      const monthResults = await batchQuery(monthTasks, 15);
+      monthResults.forEach(r => {
+        if (r?.income) {
+          const key = r.settleDate.slice(0, 7);
+          monthlyData[key] = r.income / 10000;
+        }
+      });
+      
+      updateProgress(90, '查询年数据…');
+      const yearTasks = years.map(y => () => queryRevenue(y.settleDate, 'year', API_CONFIG.centerId, API_CONFIG.centerId));
+      const yearResults = await batchQuery(yearTasks, 15);
+      yearResults.forEach(r => {
+        if (r?.income) {
+          const key = r.settleDate.slice(0, 4);
+          yearlyData[key] = r.income / 10000;
+        }
+      });
+      
+      updateProgress(100, '全部数据加载完成');
+      
+      // 数据更新后重新渲染
+      if (DATA) {
+        DATA.monthlyData = monthlyData;
+        DATA.yearlyData = yearlyData;
+        render();
+      }
+    } catch (err) {
+      console.error('后台加载失败:', err);
     }
-  });
-  
-  updateProgress(100, '加载完成');
+  }, 100);
   
   return {
     success: true,
@@ -456,8 +488,8 @@ async function loadAllData() {
     allShops: ALL_SHOPS,
     summary: {
       today: dailyData[today] || 0,
-      currentMonth: monthlyData[`${curYear}-${p(curMonth)}`] || 0,
-      currentYear: yearlyData[String(curYear)] || 0,
+      currentMonth: 0, // 月数据异步加载
+      currentYear: 0,  // 年数据异步加载
     },
   };
 }
