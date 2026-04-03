@@ -359,43 +359,39 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
   });
   const json = await res.json();
   
-  // 调试：显示所有API返回的数据
+  // 调试：显示API返回的关键数据
   const debugPanel = document.getElementById('debug-panel');
   const debugData = document.getElementById('debug-data');
   if (debugPanel && debugData) {
-    const bd = json?.data?.List?.businessData ?? json?.data?.businessData ?? json?.data ?? {};
+    const incomeObj = json?.data?.List?.income;
+    const notIncomeObj = json?.data?.List?.notIncome;
+    const bd = json?.data?.List?.businessData ?? {};
     debugPanel.style.display = 'block';
     debugData.innerHTML = `
       <b>类型：</b>${dateType} | <b>日期：</b>${settleDate}<br/>
-      <b>last（实收）：</b>${bd.last ?? '无'}<br/>
-      <b>orig（应收）：</b>${bd.orig ?? '无'}<br/>
-      <b>discTotal（优惠）：</b>${bd.discTotal ?? '无'}<br/>
-      <b>notIncomeTotal（非收入）：</b>${bd.notIncomeTotal ?? '无'}<br/>
-      <b>present（赠送）：</b>${bd.present ?? '无'}<br/>
-      <b>所有字段：</b>${JSON.stringify(bd).slice(0, 800)}
+      <b style="color:#0f0">income.incomeTotal（纯收）：</b>${incomeObj?.incomeTotal ?? '无'}<br/>
+      <b>notIncome.notIncomeTotal（非收入）：</b>${notIncomeObj?.notIncomeTotal ?? '无'}<br/>
+      <b>businessData.last（实收）：</b>${bd.last ?? '无'}<br/>
+      <b>businessData.orig（应收）：</b>${bd.orig ?? '无'}<br/>
+      <b>businessData.discTotal（优惠）：</b>${bd.discTotal ?? '无'}<br/>
+      <b>已提取纯收金额：</b>${income}
     `;
   }
 
   // 提取纯收金额数据
-  // 公式：纯收金额 = 实收(last) - 非收入金额(notIncomeTotal)
-  // 如果没有 notIncomeTotal，则用 last（实收）
+  // 公式：纯收金额 = income.incomeTotal
+  // 非收入金额 = notIncome.notIncomeTotal
+  // 实收 = businessData.last
   let income = 0;
-  const bd = json?.data?.List?.businessData ?? json?.data?.businessData ?? json?.data ?? {};
-  const last = parseFloat(bd.last) || 0;
-  const notIncomeTotal = parseFloat(bd.notIncomeTotal) || 0;
+  const incomeObj = json?.data?.List?.income;
+  const notIncomeObj = json?.data?.List?.notIncome;
+  const bd = json?.data?.List?.businessData ?? {};
   
-  if (notIncomeTotal > 0) {
-    // 纯收 = 实收 - 非收入金额
-    income = last - notIncomeTotal;
-  } else if (bd.incomeTotal !== undefined) {
-    income = parseFloat(bd.incomeTotal) || 0;
-  } else if (bd.income_total !== undefined) {
-    income = parseFloat(bd.income_total) || 0;
-  } else if (bd.income !== undefined) {
-    income = parseFloat(bd.income) || 0;
-  } else {
-    // 备用：使用实收
-    income = last;
+  if (incomeObj?.incomeTotal !== undefined) {
+    income = parseFloat(incomeObj.incomeTotal) || 0;
+  } else if (bd.last !== undefined) {
+    // 备用：使用实收（当非收入金额为0时，实收=纯收）
+    income = parseFloat(bd.last) || 0;
   }
   
   SHOP_DATA_CACHE[cacheKey] = { settleDate, dateType, centerId, shopId: queryId, income, raw: json };
