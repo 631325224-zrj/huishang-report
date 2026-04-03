@@ -300,18 +300,19 @@ async function getToken() {
 // 门店营收数据缓存
 const shopRevenueCache = {};
 
-async function queryRevenue(token, settleDate, dateType, centerId) {
-  const qs = `centerId=${centerId}&settleDate=${settleDate}&dateType=${dateType}`;
+async function queryRevenue(token, settleDate, dateType, centerId, shopId) {
+  const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${settleDate}&dateType=${dateType}`;
   const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
     method:'POST',
     headers:{'Content-Type':'application/json','access_token':token,'accessid':API_CONFIG.accessId,'granttype':'client'},
   });
   const json = await res.json();
-  const orig = parseFloat(json?.data?.List?.businessData?.orig) || 0;
+  // 纯收金额 = income.incomeTotal
+  const income = parseFloat(json?.data?.List?.income?.incomeTotal) || 0;
   // 缓存门店数据
   if (!shopRevenueCache[centerId]) shopRevenueCache[centerId] = {};
-  shopRevenueCache[centerId][settleDate] = { orig, code: json.code||0 };
-  return {settleDate, dateType, centerId, orig, code: json.code||0};
+  shopRevenueCache[centerId][settleDate] = { income, code: json.code||0 };
+  return {settleDate, dateType, centerId, shopId, income, code: json.code||0};
 }
 
 async function concurrentFetch(tasks, concurrency=8) {
@@ -357,31 +358,32 @@ async function loadAllData() {
   const years = [];
   for (let y=API_CONFIG.onlineYear; y<=curYear; y++) years.push({y, settleDate:`${y}-01-01`});
 
-  // 获取所有门店ID列表
-  const shopIds = ALL_SHOPS.map(s => s.centerId);
+  // 获取总部 centerId
+  const centerId = API_CONFIG.centerId;
 
-  el.textContent = `拉取 ${days.length}天 × ${shopIds.length}门店 + ${months.length}月 + ${years.length}年数据…`;
+  el.textContent = `拉取 ${days.length}天 × ${ALL_SHOPS.length}门店 + ${months.length}月 + ${years.length}年数据…`;
 
   // 查询所有门店的所有日期数据
+  // 注意：centerId 用总部ID，shopId 用各门店ID
   const [dayR, monthR, yearR] = await Promise.all([
-    concurrentFetch(days.flatMap(d => shopIds.map(cid => () => queryRevenue(token, d, 'day', cid)))),
-    concurrentFetch(months.flatMap(m => shopIds.map(cid => () => queryRevenue(token, m.settleDate, 'month', cid)))),
-    concurrentFetch(years.flatMap(y => shopIds.map(cid => () => queryRevenue(token, y.settleDate, 'year', cid)))),
+    concurrentFetch(days.flatMap(d => ALL_SHOPS.map(shop => () => queryRevenue(token, d, 'day', centerId, shop.centerId)))),
+    concurrentFetch(months.flatMap(m => ALL_SHOPS.map(shop => () => queryRevenue(token, m.settleDate, 'month', centerId, shop.centerId)))),
+    concurrentFetch(years.flatMap(y => ALL_SHOPS.map(shop => () => queryRevenue(token, y.settleDate, 'year', centerId, shop.centerId)))),
   ]);
 
-  // 按日期汇总所有门店数据
+  // 按日期汇总所有门店数据（纯收金额）
   const dailyData={}, monthlyData={}, yearlyData={};
   dayR.forEach(r=>{
     const key = r.settleDate;
-    dailyData[key] = (dailyData[key]||0) + r.orig;
+    dailyData[key] = (dailyData[key]||0) + r.income;
   });
   monthR.forEach(r=>{
     const key = r.settleDate.slice(0,7);
-    monthlyData[key] = (monthlyData[key]||0) + r.orig;
+    monthlyData[key] = (monthlyData[key]||0) + r.income;
   });
   yearR.forEach(r=>{
     const key = r.settleDate.slice(0,4);
-    yearlyData[key] = (yearlyData[key]||0) + r.orig;
+    yearlyData[key] = (yearlyData[key]||0) + r.income;
   });
 
   // 转换为万元
