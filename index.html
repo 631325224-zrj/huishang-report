@@ -486,7 +486,7 @@ async function loadAllData() {
   ALL_SHOPS.forEach(s => { shopDailyData[s.centerId] = {}; days.forEach(d => { shopDailyData[s.centerId][d] = 0; }); });
   
   dayResults.forEach(r => {
-    if (r?.income && r?.settleDate && r?.shopId) {
+    if (r?.income !== undefined && r?.settleDate && r?.shopId) {
       dailyData[r.settleDate] = (dailyData[r.settleDate] || 0) + r.income;
       // 保存各门店独立数据（使用 shopId 匹配）
       if (shopDailyData[r.shopId]) {
@@ -519,7 +519,7 @@ async function loadAllData() {
       
       const monthResults = await batchQuery(monthTasks, 30);
       monthResults.forEach(r => {
-        if (r?.income && r?.settleDate && r?.shopId) {
+        if (r?.income !== undefined && r?.settleDate && r?.shopId) {
           const key = r.settleDate.slice(0, 7);
           monthlyData[key] = (monthlyData[key] || 0) + r.income;
           if (shopMonthlyData[r.shopId]) {
@@ -538,7 +538,7 @@ async function loadAllData() {
       
       const yearResults = await batchQuery(yearTasks, 30);
       yearResults.forEach(r => {
-        if (r?.income && r?.settleDate && r?.shopId) {
+        if (r?.income !== undefined && r?.settleDate && r?.shopId) {
           const key = r.settleDate.slice(0, 4);
           yearlyData[key] = (yearlyData[key] || 0) + r.income;
           if (shopYearlyData[r.shopId]) {
