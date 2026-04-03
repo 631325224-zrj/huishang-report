@@ -363,14 +363,13 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
   const debugPanel = document.getElementById('debug-panel');
   const debugData = document.getElementById('debug-data');
   if (debugPanel && debugData) {
-    const incomeField = json?.data?.List?.businessData?.income ?? json?.data?.businessData?.income ?? json?.data?.income;
-    const origField = json?.data?.List?.businessData?.orig ?? json?.data?.businessData?.orig ?? json?.data?.orig;
+    const bd = json?.data?.List?.businessData ?? json?.data?.businessData ?? json?.data ?? {};
+    const fields = Object.keys(bd).filter(k => typeof bd[k] === 'number').map(k => `${k}: ${bd[k]}`).join(', ');
     debugPanel.style.display = 'block';
     debugData.innerHTML = `
       <b>类型：</b>${dateType} | <b>日期：</b>${settleDate}<br/>
-      <b style="color:#0f0">income（纯收）：</b>${incomeField ?? '无此字段'}<br/>
-      <b style="color:#f0f">orig（营收）：</b>${origField ?? '无此字段'}<br/>
-      <b>完整数据：</b>${JSON.stringify(json?.data ?? {}, null, 2).slice(0, 500)}...
+      <b style="color:#ff0">所有数字字段：</b>${fields || '无'}<br/>
+      <b>完整数据：</b>${JSON.stringify(bd, null, 2).slice(0, 600)}
     `;
   }
   
