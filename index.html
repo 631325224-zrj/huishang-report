@@ -373,20 +373,23 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
     `;
   }
 
-  // 提取纯收金额数据 - 优先使用 incomeTotal 字段
+  // 提取纯收金额数据 - 根据公式：纯收金额 = 应收(orig) - 优惠金额(discTotal)
+  // API返回的 last 字段就是计算后的纯收金额
   let income = 0;
-  if (json?.data?.List?.businessData?.incomeTotal !== undefined) {
+  if (json?.data?.List?.businessData?.last !== undefined) {
+    income = parseFloat(json.data.List.businessData.last) || 0;
+  } else if (json?.data?.businessData?.last !== undefined) {
+    income = parseFloat(json.data.businessData.last) || 0;
+  } else if (json?.data?.last !== undefined) {
+    income = parseFloat(json.data.last) || 0;
+  } else if (json?.data?.List?.businessData?.incomeTotal !== undefined) {
     income = parseFloat(json.data.List.businessData.incomeTotal) || 0;
   } else if (json?.data?.businessData?.incomeTotal !== undefined) {
     income = parseFloat(json.data.businessData.incomeTotal) || 0;
-  } else if (json?.data?.incomeTotal !== undefined) {
-    income = parseFloat(json.data.incomeTotal) || 0;
   } else if (json?.data?.List?.businessData?.income !== undefined) {
     income = parseFloat(json.data.List.businessData.income) || 0;
   } else if (json?.data?.businessData?.income !== undefined) {
     income = parseFloat(json.data.businessData.income) || 0;
-  } else if (json?.data?.income !== undefined) {
-    income = parseFloat(json.data.income) || 0;
   } else if (json?.data?.List?.businessData?.orig !== undefined) {
     // 备用：营收字段
     income = parseFloat(json.data.List.businessData.orig) || 0;
