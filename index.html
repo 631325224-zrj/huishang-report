@@ -446,18 +446,35 @@ async function loadAllData() {
   // 并发查询（限制并发数）
   const dayResults = await batchQuery(dayTasks, 20, p => updateProgress(15 + p * 0.6, `日数据 ${p}%…`));
   
-  // 汇总日数据
+  // 汇总日数据，并保存各门店独立数据
   const dailyData = {};
   days.forEach(d => { dailyData[d] = 0; });
+  
+  // 初始化各门店数据存储
+  const shopDailyData = {};
+  ALL_SHOPS.forEach(s => { shopDailyData[s.centerId] = {}; days.forEach(d => { shopDailyData[s.centerId][d] = 0; }); });
+  
   dayResults.forEach(r => {
-    if (r?.income && r?.settleDate) {
+    if (r?.income && r?.settleDate && r?.shopId) {
       dailyData[r.settleDate] = (dailyData[r.settleDate] || 0) + r.income / 10000;
+      // 保存各门店独立数据（使用 shopId 匹配）
+      if (shopDailyData[r.shopId]) {
+        shopDailyData[r.shopId][r.settleDate] = r.income / 10000;
+      }
     }
   });
   
   // 后台加载月数据（不阻塞）
   const monthlyData = {};
   const yearlyData = {};
+  
+  // 初始化各门店月/年数据存储
+  const shopMonthlyData = {};
+  const shopYearlyData = {};
+  ALL_SHOPS.forEach(s => {
+    shopMonthlyData[s.centerId] = {};
+    shopYearlyData[s.centerId] = {};
+  });
   
   updateProgress(80, '后台加载月数据…');
   setTimeout(async () => {
@@ -471,9 +488,12 @@ async function loadAllData() {
       
       const monthResults = await batchQuery(monthTasks, 30);
       monthResults.forEach(r => {
-        if (r?.income && r?.settleDate) {
+        if (r?.income && r?.settleDate && r?.shopId) {
           const key = r.settleDate.slice(0, 7);
           monthlyData[key] = (monthlyData[key] || 0) + r.income / 10000;
+          if (shopMonthlyData[r.shopId]) {
+            shopMonthlyData[r.shopId][key] = r.income / 10000;
+          }
         }
       });
       
@@ -487,9 +507,12 @@ async function loadAllData() {
       
       const yearResults = await batchQuery(yearTasks, 30);
       yearResults.forEach(r => {
-        if (r?.income && r?.settleDate) {
+        if (r?.income && r?.settleDate && r?.shopId) {
           const key = r.settleDate.slice(0, 4);
           yearlyData[key] = (yearlyData[key] || 0) + r.income / 10000;
+          if (shopYearlyData[r.shopId]) {
+            shopYearlyData[r.shopId][key] = r.income / 10000;
+          }
         }
       });
       
@@ -499,6 +522,9 @@ async function loadAllData() {
       if (DATA) {
         DATA.monthlyData = monthlyData;
         DATA.yearlyData = yearlyData;
+        DATA.shopDailyData = shopDailyData;
+        DATA.shopMonthlyData = shopMonthlyData;
+        DATA.shopYearlyData = shopYearlyData;
         render();
       }
     } catch (err) {
@@ -519,6 +545,9 @@ async function loadAllData() {
     availableMonths: months.map(m => m.key),
     dailyDates: days,
     allShops: ALL_SHOPS,
+    shopDailyData,
+    shopMonthlyData,
+    shopYearlyData,
     summary: {
       today: dailyData[today] || 0,
       currentMonth: monthlyData[`${curYear}-${p(curMonth)}`] || 0,
@@ -540,16 +569,26 @@ const calcChange = (a, b) => {
 const prevYearDate = d => { const x = new Date(d); x.setFullYear(x.getFullYear() - 1); return x.toISOString().slice(0, 10); };
 
 // ════════ 获取汇总数据 ════════
-function getSummaryRevenue(isCurrent) {
+function getSummaryRevenue(isCurrent, shopCenterId) {
   if (STATE.dim === 'day') {
     const date = isCurrent ? STATE.dateA : STATE.dateB;
+    if (shopCenterId && DATA?.shopDailyData?.[shopCenterId]) {
+      return DATA.shopDailyData[shopCenterId][date] || 0;
+    }
     return DATA?.dailyData?.[date] || 0;
   } else if (STATE.dim === 'month') {
     const y = isCurrent ? STATE.yearA : STATE.yearB;
     const m = isCurrent ? STATE.monthA : STATE.monthB;
-    return DATA?.monthlyData?.[`${y}-${p(m)}`] || 0;
+    const key = `${y}-${p(m)}`;
+    if (shopCenterId && DATA?.shopMonthlyData?.[shopCenterId]) {
+      return DATA.shopMonthlyData[shopCenterId][key] || 0;
+    }
+    return DATA?.monthlyData?.[key] || 0;
   } else {
     const y = isCurrent ? STATE.yearOnly : STATE.yearPrev;
+    if (shopCenterId && DATA?.shopYearlyData?.[shopCenterId]) {
+      return DATA.shopYearlyData[shopCenterId][String(y)] || 0;
+    }
     return DATA?.yearlyData?.[String(y)] || 0;
   }
 }
@@ -709,8 +748,15 @@ function updateBSelector() {
 
 // ════════ 渲染汇总卡片 ════════
 function renderSummary() {
-  const revA = getSummaryRevenue(true);
-  const revB = getSummaryRevenue(false);
+  // 确定当前查看范围对应的 centerId
+  let shopCenterId = null;
+  if (STATE.shop) {
+    const shop = ALL_SHOPS.find(s => s.name === STATE.shop);
+    if (shop) shopCenterId = shop.centerId;
+  }
+
+  const revA = getSummaryRevenue(true, shopCenterId);
+  const revB = getSummaryRevenue(false, shopCenterId);
   const ch = calcChange(revA, revB);
 
   let labelA = '', labelB = '';
@@ -813,20 +859,6 @@ function renderTable(shops) {
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
 
-  const revA = getSummaryRevenue(true);
-  const revB = getSummaryRevenue(false);
-
-  if (shops.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="icon">📊</div><p>当前条件下无数据</p><p style="font-size:12px">请确认收银系统已上线并有营业数据</p></div></td></tr>';
-    return;
-  }
-
-  // 显示说明：表格数据为总部汇总，各门店明细需要选择具体门店查看
-  const noticeRow = `<tr><td colspan="6" style="background:#fff8e8;color:#8B4513;font-size:11px;padding:8px 12px;text-align:left">📋 当前显示总部汇总数据，如需查看各门店明细，请从上方「门店」下拉框选择具体门店</td></tr>`;
-  tbody.innerHTML = noticeRow;
-
-  // 汇总行
-  const ch = calcChange(revA, revB);
   let labelA = '', labelB = '';
   if (STATE.dim === 'month') {
     labelA = `${STATE.yearA}年${MONTH_NAMES[STATE.monthA - 1]}`;
@@ -840,14 +872,100 @@ function renderTable(shops) {
   document.getElementById('th-a').textContent = labelA;
   document.getElementById('th-b').textContent = labelB;
 
+  if (shops.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="icon">📊</div><p>当前条件下无数据</p><p style="font-size:12px">请确认收银系统已上线并有营业数据</p></div></td></tr>';
+    return;
+  }
+
+  // 如果选择了单门店，显示单门店数据
+  if (STATE.shop && shops.length === 1) {
+    const shop = shops[0];
+    const revA = getSummaryRevenue(true, shop.centerId);
+    const revB = getSummaryRevenue(false, shop.centerId);
+    const ch = calcChange(revA, revB);
+    const grandtot = document.createElement('tr');
+    grandtot.className = 'grandtot';
+    grandtot.innerHTML = `
+      <td class="c-name" colspan="2">🏪 ${shop.name}</td>
+      <td class="c-num">${fmt(revA)}</td>
+      <td class="c-num">${fmt(revB)}</td>
+      <td class="c-num ${clsUp(ch.diff)}">${ch.diff !== null ? sign(ch.diff) + Math.abs(ch.diff).toFixed(2) : '<span class="c-na">—</span>'}</td>
+      <td class="c-pct ${clsUp(ch.pct)}">${ch.pct !== null ? sign(ch.pct) + Math.abs(ch.pct).toFixed(1) + '%' : '<span class="c-na">—</span>'}</td>`;
+    tbody.appendChild(grandtot);
+    return;
+  }
+
+  // 显示各区域和门店明细
+  let grandTotalA = 0, grandTotalB = 0;
+  const groupedByRegion = {};
+
+  // 按区域分组
+  shops.forEach(shop => {
+    const region = shop.region || '其他';
+    if (!groupedByRegion[region]) groupedByRegion[region] = [];
+    groupedByRegion[region].push(shop);
+  });
+
+  // 按区域顺序渲染
+  const regionOrder = ['北京', '华北', '合肥', '皖北', '浙沪', '黄山', '华南'];
+  const sortedRegions = Object.keys(groupedByRegion).sort((a, b) => {
+    const ai = regionOrder.indexOf(a), bi = regionOrder.indexOf(b);
+    return (ai === -1 ? 9 : ai) - (bi === -1 ? 9 : bi);
+  });
+
+  sortedRegions.forEach(region => {
+    const regionShops = groupedByRegion[region];
+    let regionTotalA = 0, regionTotalB = 0;
+
+    // 区域小计行
+    const regionRow = document.createElement('tr');
+    regionRow.className = 'subtot';
+    regionRow.innerHTML = `<td class="c-name" colspan="2">📍 ${region}区域</td><td colspan="4" style="text-align:right;padding-right:12px;font-size:11px">共 ${regionShops.length} 家门店</td>`;
+    tbody.appendChild(regionRow);
+
+    // 各门店行
+    regionShops.forEach(shop => {
+      const revA = getSummaryRevenue(true, shop.centerId);
+      const revB = getSummaryRevenue(false, shop.centerId);
+      const ch = calcChange(revA, revB);
+      regionTotalA += revA;
+      regionTotalB += revB;
+      grandTotalA += revA;
+      grandTotalB += revB;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="c-name" style="padding-left:24px!important">${shop.name}</td>
+        <td class="c-num">${fmt(revA)}</td>
+        <td class="c-num">${fmt(revB)}</td>
+        <td class="c-num ${clsUp(ch.diff)}">${ch.diff !== null ? sign(ch.diff) + Math.abs(ch.diff).toFixed(2) : '<span class="c-na">—</span>'}</td>
+        <td class="c-pct ${clsUp(ch.pct)}">${ch.pct !== null ? sign(ch.pct) + Math.abs(ch.pct).toFixed(1) + '%' : '<span class="c-na">—</span>'}</td>`;
+      tbody.appendChild(tr);
+    });
+
+    // 区域汇总行
+    const regionCh = calcChange(regionTotalA, regionTotalB);
+    const regionTotalRow = document.createElement('tr');
+    regionTotalRow.className = 'subtot';
+    regionTotalRow.innerHTML = `
+      <td class="c-name" colspan="2" style="padding-left:12px">${region}区域汇总</td>
+      <td class="c-num">${fmt(regionTotalA)}</td>
+      <td class="c-num">${fmt(regionTotalB)}</td>
+      <td class="c-num ${clsUp(regionCh.diff)}">${regionCh.diff !== null ? sign(regionCh.diff) + Math.abs(regionCh.diff).toFixed(2) : '<span class="c-na">—</span>'}</td>
+      <td class="c-pct ${clsUp(regionCh.pct)}">${regionCh.pct !== null ? sign(regionCh.pct) + Math.abs(regionCh.pct).toFixed(1) + '%' : '<span class="c-na">—</span>'}</td>`;
+    tbody.appendChild(regionTotalRow);
+  });
+
+  // 总部汇总行
+  const grandCh = calcChange(grandTotalA, grandTotalB);
   const grandtot = document.createElement('tr');
   grandtot.className = 'grandtot';
   grandtot.innerHTML = `
     <td class="c-name" colspan="2">🏢 总部汇总</td>
-    <td class="c-num">${fmt(revA)}</td>
-    <td class="c-num">${fmt(revB)}</td>
-    <td class="c-num ${clsUp(ch.diff)}">${ch.diff !== null ? sign(ch.diff) + Math.abs(ch.diff).toFixed(2) : '<span class="c-na">—</span>'}</td>
-    <td class="c-pct ${clsUp(ch.pct)}">${ch.pct !== null ? sign(ch.pct) + Math.abs(ch.pct).toFixed(1) + '%' : '<span class="c-na">—</span>'}</td>`;
+    <td class="c-num">${fmt(grandTotalA)}</td>
+    <td class="c-num">${fmt(grandTotalB)}</td>
+    <td class="c-num ${clsUp(grandCh.diff)}">${grandCh.diff !== null ? sign(grandCh.diff) + Math.abs(grandCh.diff).toFixed(2) : '<span class="c-na">—</span>'}</td>
+    <td class="c-pct ${clsUp(grandCh.pct)}">${grandCh.pct !== null ? sign(grandCh.pct) + Math.abs(grandCh.pct).toFixed(1) + '%' : '<span class="c-na">—</span>'}</td>`;
   tbody.appendChild(grandtot);
 }
 
