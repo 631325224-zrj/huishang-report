@@ -56,8 +56,8 @@ button { border: 1px solid #ddd; border-radius: 6px; padding: 6px 14px; font-siz
 .table-header .badge { font-size: 11px; background: #fdecea; color: #c0392b; padding: 2px 8px; border-radius: 10px; font-weight: 600; margin-left: 8px; }
 .table-header .meta { font-size: 11px; color: #999; font-weight: 400; margin-left: auto; }
 .table-header .actions { display: flex; gap: 8px; margin-left: auto; }
-.table-scroll { max-height: 500px; overflow: auto; transition: max-height 0.3s ease; }
-.table-scroll.expanded { max-height: calc(100vh - 400px); }
+.table-scroll { max-height: 500px; overflow: auto; transition: max-height 0.3s ease, padding 0.3s ease; }
+.table-scroll.expanded { max-height: 800px; max-height: 80vh; }
 .table-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
 .table-scroll::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
 table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
@@ -137,11 +137,8 @@ canvas { display: block; }
     <div id="ctrl-day" class="ctrl-group">
       <span class="ctrl-label">当期</span>
       <input type="date" id="dateA">
-      <select id="selDayCompare">
-        <option value="yoy">同比</option>
-        <option value="dod">日对比</option>
-      </select>
-      <span id="lblDateB" class="ctrl-label">对比期</span>
+      <span class="ctrl-label" style="color:#aaa;font-size:12px">同比去年同日</span>
+      <span id="lblDateB" class="ctrl-label" style="display:none">对比期</span>
       <input type="date" id="dateB" style="display:none">
     </div>
 
@@ -235,7 +232,7 @@ canvas { display: block; }
             <th class="c-num" id="th-a" onclick="sortTable('revA')" title="点击排序">当期<span class="sort-icon" id="sort-revA">⇅</span></th>
             <th class="c-num" id="th-b" onclick="sortTable('revB')" title="点击排序">对比期<span class="sort-icon" id="sort-revB">⇅</span></th>
             <th class="c-num" onclick="sortTable('diff')" title="点击排序">增减额<span class="sort-icon" id="sort-diff">⇅</span></th>
-            <th class="c-pct" onclick="sortTable('pct')" title="点击排序">增减幅<span class="sort-icon" id="sort-pct">⇅</span></th>
+            <th class="c-pct" onclick="sortTable('pct')" title="点击排序">增减幅<span class="sort-icon" id="sort-pct">⇅</span><span style="margin-left:8px;cursor:pointer" onclick="resetSort()" title="恢复默认排序">🔄</span></th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -356,11 +353,29 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
   }
   
   const qs = `centerId=${centerId}&shopId=${queryId}&settleDate=${settleDate}&dateType=${dateType}`;
-  const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json','access_token':token,'accessid':API_CONFIG.accessId,'granttype':'client'},
-  });
-  const json = await res.json();
+  
+  // 带重试的 fetch（超时 10 秒，最多重试 1 次）
+  let json, lastError;
+  for (let retry = 0; retry < 2; retry++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    try {
+      const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json','access_token':token,'accessid':API_CONFIG.accessId,'granttype':'client'},
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      json = await res.json();
+      break; // 成功则退出重试循环
+    } catch (e) {
+      clearTimeout(timeoutId);
+      lastError = e;
+      if (e.name !== 'AbortError') throw e; // 非超时错误直接抛出
+      console.warn(`[API超时，重试] ${settleDate} ${queryId} (第${retry + 1}次)`);
+    }
+  }
+  if (!json) throw lastError; // 重试都失败则抛出错误
   
   // 提取纯收金额数据
   // 公式：纯收金额 = income.incomeTotal
@@ -438,9 +453,9 @@ async function loadAllData() {
   const curMonth = now.getMonth() + 1;
   const today = `${curYear}-${p(curMonth)}-${p(now.getDate())}`;
   
-  // ========== 生成日期范围 ==========
+  // ========== 生成日期范围（扩展到35天，确保覆盖上月完整数据）==========
   const days = [];
-  for (let i = 29; i >= 0; i--) {
+  for (let i = 34; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
     days.push(d.toISOString().slice(0, 10));
@@ -485,90 +500,55 @@ async function loadAllData() {
   const shopDailyData = {};
   ALL_SHOPS.forEach(s => { shopDailyData[s.centerId] = {}; days.forEach(d => { shopDailyData[s.centerId][d] = 0; }); });
   
+  // 诊断：检查 dayResults
+  const validResults = dayResults.filter(r => r && r.income !== undefined);
+  console.log(`[日数据诊断] 总结果:${dayResults.length} 有效:${validResults.length}`, validResults.slice(0,3));
+  
   dayResults.forEach(r => {
-    // 调试：检查数据结构
     if (r?.income !== undefined && r?.settleDate && r?.shopId) {
       dailyData[r.settleDate] = (dailyData[r.settleDate] || 0) + r.income;
       // 保存各门店独立数据（使用 shopId 匹配）
-      if (shopDailyData[r.shopId]) {
-        shopDailyData[r.shopId][r.settleDate] = r.income;
-      } else {
-        // 调试：输出未匹配的 shopId
-        console.log('未匹配 shopId:', r.shopId, '可用键:', Object.keys(shopDailyData));
+      const matched = shopDailyData[r.shopId];
+      if (matched) {
+        matched[r.settleDate] = r.income;
       }
-    } else {
-      // 调试：输出被跳过的记录
-      console.log('跳过记录:', { income: r?.income, settleDate: r?.settleDate, shopId: r?.shopId });
     }
   });
   
-  // 后台加载月数据（不阻塞）
+  // 【修复】将日数据汇总到月/年数据（一次性汇总，无延迟）
   const monthlyData = {};
   const yearlyData = {};
-  
-  // 初始化各门店月/年数据存储
   const shopMonthlyData = {};
   const shopYearlyData = {};
   ALL_SHOPS.forEach(s => {
     shopMonthlyData[s.centerId] = {};
     shopYearlyData[s.centerId] = {};
   });
-  
-  updateProgress(80, '后台加载月数据…');
-  setTimeout(async () => {
-    try {
-      const monthTasks = [];
-      months.forEach(m => {
-        shopIds.forEach(shopId => {
-          monthTasks.push(() => queryRevenue(m.settleDate, 'month', API_CONFIG.centerId, shopId));
-        });
-      });
-      
-      const monthResults = await batchQuery(monthTasks, 30);
-      monthResults.forEach(r => {
-        if (r?.income !== undefined && r?.settleDate && r?.shopId) {
-          const key = r.settleDate.slice(0, 7);
-          monthlyData[key] = (monthlyData[key] || 0) + r.income;
-          if (shopMonthlyData[r.shopId]) {
-            shopMonthlyData[r.shopId][key] = r.income;
-          }
+  Object.entries(shopDailyData).forEach(([shopId, dayObj]) => {
+    Object.entries(dayObj).forEach(([date, income]) => {
+      if (income > 0) {
+        const monthKey = date.slice(0, 7);
+        const yearKey = date.slice(0, 4);
+        monthlyData[monthKey] = (monthlyData[monthKey] || 0) + income;
+        yearlyData[yearKey] = (yearlyData[yearKey] || 0) + income;
+        if (shopMonthlyData[shopId]) {
+          shopMonthlyData[shopId][monthKey] = (shopMonthlyData[shopId][monthKey] || 0) + income;
         }
-      });
-      
-      // 年数据
-      const yearTasks = [];
-      years.forEach(y => {
-        shopIds.forEach(shopId => {
-          yearTasks.push(() => queryRevenue(y.settleDate, 'year', API_CONFIG.centerId, shopId));
-        });
-      });
-      
-      const yearResults = await batchQuery(yearTasks, 30);
-      yearResults.forEach(r => {
-        if (r?.income !== undefined && r?.settleDate && r?.shopId) {
-          const key = r.settleDate.slice(0, 4);
-          yearlyData[key] = (yearlyData[key] || 0) + r.income;
-          if (shopYearlyData[r.shopId]) {
-            shopYearlyData[r.shopId][key] = r.income;
-          }
+        if (shopYearlyData[shopId]) {
+          shopYearlyData[shopId][yearKey] = (shopYearlyData[shopId][yearKey] || 0) + income;
         }
-      });
-      
-      updateProgress(100, '全部数据加载完成');
-      
-      // 更新渲染
-      if (DATA) {
-        DATA.monthlyData = monthlyData;
-        DATA.yearlyData = yearlyData;
-        DATA.shopDailyData = shopDailyData;
-        DATA.shopMonthlyData = shopMonthlyData;
-        DATA.shopYearlyData = shopYearlyData;
-        render();
       }
-    } catch (err) {
-      console.error('后台加载失败:', err);
-    }
-  }, 100);
+    });
+  });
+  console.log('[月数据]', monthlyData);
+  console.log('[门店月数据] 大蜀山:', shopMonthlyData[247421]);
+
+  // 把初始 35 天数据已覆盖的月份标记为"需要完整加载"（不标记为完整加载，
+  // 让 ensureMonthData 在首次查看时做一次完整加载以保证准确性）
+  // 注：当前月数据是实时的，标记为已加载避免反复触发
+  const curMonthKey = `${curYear}-${p(curMonth)}`;
+  loadedMonths.add(curMonthKey);
+  console.log(`[初始化] 当前月 ${curMonthKey} 标记为已加载（实时数据）`);
   
   return {
     success: true,
@@ -600,12 +580,99 @@ const fmt = v => (!v && v !== 0) ? '—' : v.toFixed(2);
 const clsUp = v => v === null ? '' : (v >= 0 ? 'c-up' : 'c-down');
 const sign  = v => v === null ? '' : (v >= 0 ? '▲' : '▼');
 const calcChange = (a, b) => {
-  if (!a && !b) return { diff: null, pct: null };
-  if (!b) return { diff: a, pct: null };
-  if (!a) return { diff: -b, pct: -100 };
+  if (a === 0 && b === 0) return { diff: 0, pct: 0 };
+  if (a === 0 && b > 0) return { diff: -b, pct: -100 };
+  if (b === 0 && a > 0) return { diff: a, pct: null };
+  if (a === null || a === undefined || b === null || b === undefined) return { diff: null, pct: null };
   return { diff: a - b, pct: (a - b) / b * 100 };
 };
 const prevYearDate = d => { const x = new Date(d); x.setFullYear(x.getFullYear() - 1); return x.toISOString().slice(0, 10); };
+
+// ════════ 按需加载历史月份数据 ════════
+let loadingMonths = new Set();   // 正在加载中
+let loadedMonths  = new Set();   // 已完整加载完毕（用于判断是否需要重新加载）
+
+async function ensureMonthData(year, month) {
+  const key = `${year}-${p(month)}`;
+  // 已完整加载过，直接跳过
+  if (loadedMonths.has(key)) {
+    return;
+  }
+  // 正在加载中，跳过（避免并发重复加载）
+  if (loadingMonths.has(key)) {
+    return;
+  }
+  loadingMonths.add(key);
+  console.log(`[加载历史月份] ${key}...`);
+  try {
+    const lastDay = new Date(year, month, 0).getDate();
+    const monthDays = [];
+    for (let d = 1; d <= lastDay; d++) {
+      monthDays.push(`${year}-${p(month)}-${p(d)}`);
+    }
+    const shopIds = ALL_SHOPS.map(s => s.centerId);
+
+    // ── 先清零该月所有数据，防止重复累加 ──
+    const yKey = key.slice(0, 4);
+    const oldMonthTotal = DATA.monthlyData[key] || 0;
+    DATA.monthlyData[key] = 0;
+    if (DATA.yearlyData[yKey] !== undefined) {
+      DATA.yearlyData[yKey] = Math.max(0, DATA.yearlyData[yKey] - oldMonthTotal);
+    }
+    shopIds.forEach(sid => {
+      const shopMonth = DATA.shopMonthlyData[sid];
+      if (shopMonth && shopMonth[key]) {
+        const oldShop = shopMonth[key];
+        shopMonth[key] = 0;
+        if (DATA.shopYearlyData[sid]?.[yKey] !== undefined) {
+          DATA.shopYearlyData[sid][yKey] = Math.max(0, DATA.shopYearlyData[sid][yKey] - oldShop);
+        }
+      }
+    });
+
+    // ── 优先从缓存聚合，缺失日期才发 API 请求 ──
+    const missingTasks = [];
+    const cachedResults = [];
+    monthDays.forEach(d => {
+      shopIds.forEach(shopId => {
+        const cacheKey = `${API_CONFIG.centerId}_${shopId}_${d}_day`;
+        if (SHOP_DATA_CACHE[cacheKey] !== undefined) {
+          cachedResults.push(SHOP_DATA_CACHE[cacheKey]);
+        } else {
+          missingTasks.push(() => queryRevenue(d, 'day', API_CONFIG.centerId, shopId));
+        }
+      });
+    });
+    console.log(`[${key}] 缓存命中:${cachedResults.length} 需请求:${missingTasks.length}`);
+
+    const freshResults = missingTasks.length > 0 ? await batchQuery(missingTasks, 15) : [];
+    const allResults = [...cachedResults, ...freshResults];
+
+    // 诊断
+    const validR = allResults.filter(r => r?.income > 0);
+    console.log(`[${key} 聚合诊断] 总:${allResults.length} 有效(income>0):${validR.length}`);
+
+    allResults.forEach(r => {
+      if (r?.income !== undefined && r?.settleDate && r?.shopId) {
+        const mKey = r.settleDate.slice(0, 7);
+        const yKey2 = r.settleDate.slice(0, 4);
+        DATA.monthlyData[mKey] = (DATA.monthlyData[mKey] || 0) + r.income;
+        DATA.yearlyData[yKey2] = (DATA.yearlyData[yKey2] || 0) + r.income;
+        if (!DATA.shopMonthlyData[r.shopId]) DATA.shopMonthlyData[r.shopId] = {};
+        if (!DATA.shopYearlyData[r.shopId]) DATA.shopYearlyData[r.shopId] = {};
+        DATA.shopMonthlyData[r.shopId][mKey] = (DATA.shopMonthlyData[r.shopId][mKey] || 0) + r.income;
+        DATA.shopYearlyData[r.shopId][yKey2] = (DATA.shopYearlyData[r.shopId][yKey2] || 0) + r.income;
+      }
+    });
+    console.log(`[加载完成] ${key}:`, DATA.monthlyData[key]);
+    loadedMonths.add(key); // ✅ 标记为已完整加载
+    render();
+  } catch (e) {
+    console.error(`[加载失败] ${key}:`, e);
+  } finally {
+    loadingMonths.delete(key);
+  }
+}
 
 // ════════ 获取汇总数据 ════════
 function getSummaryRevenue(isCurrent, shopCenterId) {
@@ -708,23 +775,12 @@ function bindEvents() {
 
   document.getElementById('selCompare').addEventListener('change', e => { STATE.compare = e.target.value; updateBSelector(); render(); });
 
-  document.getElementById('selDayCompare').addEventListener('change', e => {
-    STATE.compare = e.target.value;
-    const isDod = STATE.compare === 'dod';
-    document.getElementById('dateB').style.display = isDod ? '' : 'none';
-    document.getElementById('lblDateB').style.display = isDod ? '' : 'none';
-    if (!isDod) {
-      const prev = prevYearDate(STATE.dateA);
-      document.getElementById('dateB').value = prev;
-      STATE.dateB = prev;
-    }
-    render();
-  });
+  // 日维度固定使用同比，selDayCompare 已移除，无需监听
 
-  document.getElementById('selYearA').addEventListener('change', e => { STATE.yearA = +e.target.value; updateBSelector(); render(); });
-  document.getElementById('selYearB').addEventListener('change', e => { STATE.yearB = +e.target.value; render(); });
-  document.getElementById('selMonthA').addEventListener('change', e => { STATE.monthA = +e.target.value; updateBSelector(); render(); });
-  document.getElementById('selMonthB').addEventListener('change', e => { STATE.monthB = +e.target.value; render(); });
+  document.getElementById('selYearA').addEventListener('change', e => { STATE.yearA = +e.target.value; updateBSelector(); ensureMonthData(STATE.yearA, STATE.monthA); render(); });
+  document.getElementById('selYearB').addEventListener('change', e => { STATE.yearB = +e.target.value; ensureMonthData(STATE.yearB, STATE.monthB); render(); });
+  document.getElementById('selMonthA').addEventListener('change', e => { STATE.monthA = +e.target.value; updateBSelector(); ensureMonthData(STATE.yearA, STATE.monthA); render(); });
+  document.getElementById('selMonthB').addEventListener('change', e => { STATE.monthB = +e.target.value; ensureMonthData(STATE.yearB, STATE.monthB); render(); });
   document.getElementById('selYearOnly').addEventListener('change', e => { STATE.yearOnly = +e.target.value; render(); });
   document.getElementById('selYearPrev').addEventListener('change', e => { STATE.yearPrev = +e.target.value; render(); });
 
@@ -756,9 +812,6 @@ function bindEvents() {
     STATE.region = ''; STATE.shop = '';
     document.getElementById('selRegion').value = '';
     document.getElementById('selShop').value = '';
-    document.getElementById('selDayCompare').value = 'yoy';
-    document.getElementById('dateB').style.display = 'none';
-    document.getElementById('lblDateB').style.display = 'none';
     const prev = prevYearDate(STATE.dateA);
     document.getElementById('dateB').value = prev;
     STATE.dateB = prev;
@@ -794,6 +847,15 @@ function renderSummary() {
     if (shop) shopCenterId = shop.centerId;
   }
 
+  // 自动加载对比月份数据（如果缺失）
+  if (STATE.dim === 'month') {
+    ensureMonthData(STATE.yearA, STATE.monthA); // 当前月
+    ensureMonthData(STATE.yearB, STATE.monthB); // 对比月（环比）或去年同月（同比）
+  } else if (STATE.dim === 'year') {
+    ensureMonthData(STATE.yearOnly, 1);
+    ensureMonthData(STATE.yearPrev, 1);
+  }
+
   const revA = getSummaryRevenue(true, shopCenterId);
   const revB = getSummaryRevenue(false, shopCenterId);
   const ch = calcChange(revA, revB);
@@ -815,7 +877,7 @@ function renderSummary() {
 
   document.getElementById('sc-label-b').textContent = labelB + ' 纯收金额';
   document.getElementById('sc-val-b').textContent = fmt(revB);
-  const compType = STATE.compare === 'yoy' ? '同比' : (STATE.dim === 'day' ? '日对比' : '环比');
+  const compType = STATE.dim === 'day' ? '同比' : (STATE.compare === 'yoy' ? '同比' : '环比');
   document.getElementById('sc-sub-b').textContent = compType;
 
   const diffEl = document.getElementById('sc-diff');
@@ -866,6 +928,17 @@ function sortTable(field) {
   render();
 }
 
+// ════════ 恢复默认排序 ════════
+function resetSort() {
+  SORT.field = null;
+  SORT.asc = true;
+  document.querySelectorAll('.sort-icon').forEach(el => {
+    el.classList.remove('active');
+    el.textContent = '⇅';
+  });
+  render();
+}
+
 // ════════ 渲染图表 ════════
 function renderCharts() {
   if (chartBar) { chartBar.destroy(); chartBar = null; }
@@ -884,6 +957,18 @@ function renderCharts() {
 
   const revA = getSummaryRevenue(true);
   const revB = getSummaryRevenue(false);
+  const monthlyKeys = Object.keys(DATA?.monthlyData || {});
+  
+  // 调试：更新页面上已有的调试面板
+  const debugData = document.getElementById('debug-data');
+  if (debugData) {
+    debugData.innerHTML += `
+      <br/><b style="color:#f0f">📊 图表数据：</b><br/>
+      <b>当期(revA)：</b>${revA.toFixed(2)}<br/>
+      <b>对比期(revB)：</b>${revB.toFixed(2)}<br/>
+      <b>月数据键数量：</b>${monthlyKeys.length}<br/>
+    `;
+  }
 
   // 柱状图：当期 vs 对比期
   const ctxBar = document.getElementById('chartBar').getContext('2d');
@@ -1050,6 +1135,24 @@ function renderTable(shops) {
 async function render() {
   if (!DATA) return;
 
+  // 调试：显示 DATA 关键信息
+  const debugPanel = document.getElementById('debug-panel');
+  const debugData = document.getElementById('debug-data');
+  const shopKeys = DATA.shopDailyData ? Object.keys(DATA.shopDailyData) : [];
+  const centerIds = ALL_SHOPS.map(s => s.centerId);
+  const matchCount = shopKeys.filter(k => centerIds.includes(k)).length;
+  
+  debugPanel.style.display = 'block';
+  debugData.innerHTML = `
+    <b style="color:#ff0">🔍 数据诊断：</b><br/>
+    <b>shopDailyData 键数量：</b>${shopKeys.length}<br/>
+    <b>ALL_SHOPS centerId 数量：</b>${centerIds.length}<br/>
+    <b>匹配的键数量：</b>${matchCount}<br/>
+    <b>shopDailyData 键：</b>${shopKeys.slice(0, 5).join(', ')}${shopKeys.length > 5 ? '...' : ''}<br/>
+    <b>centerId 示例：</b>${centerIds.slice(0, 5).join(', ')}<br/>
+    <b>STATE.dim：</b>${STATE.dim} | <b>STATE.dateA：</b>${STATE.dateA}<br/>
+  `;
+
   const title = STATE.shop ? STATE.shop : (STATE.region ? STATE.region + '区域' : '全部门店');
   document.getElementById('table-title').textContent = title + ' 经营数据';
 
@@ -1112,7 +1215,7 @@ function exportData() {
   } else if (STATE.dim === 'day') {
     labelA = STATE.dateA;
     labelB = STATE.compare === 'yoy' ? prevYearDate(STATE.dateA) : STATE.dateB;
-    compareLabel = STATE.compare === 'yoy' ? '同比' : '日对比';
+    compareLabel = '同比';
   } else {
     labelA = `${STATE.yearOnly}年`; labelB = `${STATE.yearPrev}年`; compareLabel = '同比';
   }
@@ -1207,9 +1310,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     initSelectors();
     render();
   } catch (err) {
-    console.error(err);
+    console.error('加载失败:', err);
     document.getElementById('loading-title').textContent = '⚠️ 数据加载失败';
-    document.getElementById('loading-status').textContent = err.message || '请检查网络连接后刷新重试';
+    // 更健壮的错误信息提取
+    let errMsg = '请检查网络连接后刷新重试';
+    if (err) {
+      if (typeof err === 'string') errMsg = err;
+      else if (err.message) errMsg = err.message;
+      else if (err.name === 'AbortError') errMsg = '请求超时，请检查网络连接后刷新';
+      else if (err.type) errMsg = err.type; // 可能包含 'cors', 'network' 等
+    }
+    document.getElementById('loading-status').textContent = errMsg;
     document.getElementById('loading-progress-bar').style.background = '#e74c3c';
   }
 });
