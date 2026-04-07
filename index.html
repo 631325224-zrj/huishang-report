@@ -441,26 +441,67 @@ function updateProgress(percent, text) {
 // 查询所有门店数据并汇总（因为总部 centerId=247412 返回0）
 // ═══════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════
+// localStorage 持久化缓存（用于历史月份数据）
+// 策略：首次加载时从 localStorage 恢复历史月份，
+//       后续 ensureMonthData 加载的新月份自动写入缓存，
+//       无需重复请求 API
+// ══════════════════════════════════════════════════════════
+const LS_MONTHLY = 'hs_monthly_cache';   // { 'YYYY-MM': { total, shops: { cid: amount } } }
+const LS_META    = 'hs_monthly_meta';     // { loadedMonths: ['2026-03', ...] }
+
+function lsGet(key, fallback = null) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+}
+function lsSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { console.warn('[缓存] localStorage 写入失败', e); }
+}
+
+function lsRestoreMonths() {
+  // 从 localStorage 恢复已加载月份列表
+  const meta = lsGet(LS_META, { loadedMonths: [] });
+  meta.loadedMonths.forEach(m => loadedMonths.add(m));
+  console.log(`[缓存恢复] ${loadedMonths.size} 个历史月份已从本地缓存加载`);
+}
+
+function lsSaveMonth(key, total, shops) {
+  // 保存单月数据到 localStorage
+  const cache = lsGet(LS_MONTHLY, {});
+  cache[key] = { total, shops, ts: Date.now() };
+  lsSet(LS_MONTHLY, cache);
+}
+
+function lsLoadMonth(key) {
+  // 从 localStorage 读取单月数据
+  const cache = lsGet(LS_MONTHLY, {});
+  return cache[key] || null;
+}
+
+function lsSaveMeta() {
+  lsSet(LS_META, { loadedMonths: [...loadedMonths] });
+}
+
 async function loadAllData() {
   updateProgress(5, '获取访问凭证…');
   token = await getToken();
   if (!token) {
     throw new Error('无法获取 API Token，请检查网络连接后刷新重试');
   }
-  
+
   const now = new Date();
   const curYear = now.getFullYear();
   const curMonth = now.getMonth() + 1;
   const today = `${curYear}-${p(curMonth)}-${p(now.getDate())}`;
-  
-  // ========== 生成日期范围（扩展到35天，确保覆盖上月完整数据）==========
+  const curMonthKey = `${curYear}-${p(curMonth)}`;
+
+  // ── 生成近 7 天日期列表（只用于日报图表，减少初始请求）──
   const days = [];
-  for (let i = 34; i >= 0; i--) {
+  for (let i = 6; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
-    days.push(d.toISOString().slice(0, 10));
+    days.push(`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`);
   }
-  
+
   const months = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now);
@@ -469,87 +510,131 @@ async function loadAllData() {
     if (y < API_CONFIG.onlineYear || (y === API_CONFIG.onlineYear && m < API_CONFIG.onlineMonth)) continue;
     months.push({ key: `${y}-${p(m)}`, settleDate: `${y}-${p(m)}-01` });
   }
-  
+
   const years = [];
   for (let y = API_CONFIG.onlineYear; y <= curYear; y++) {
     years.push({ key: String(y), settleDate: `${y}-01-01` });
   }
-  
-  // ========== 获取所有门店的 centerId ==========
+
   const shopIds = ALL_SHOPS.map(s => s.centerId);
-  
-  // ========== 查询并汇总所有数据 ==========
-  updateProgress(15, '加载日数据…');
-  
-  // 生成所有查询任务（日期 × 门店）
+
+  // ── 从 localStorage 恢复历史月份缓存（0 API 请求）──
+  updateProgress(10, '恢复本地缓存…');
+  lsRestoreMonths(); // 填充 loadedMonths
+
+  // 初始化数据结构
+  const monthlyData = {};
+  const yearlyData  = {};
+  const shopMonthlyData = {};
+  const shopYearlyData  = {};
+  ALL_SHOPS.forEach(s => {
+    shopMonthlyData[s.centerId] = {};
+    shopYearlyData[s.centerId]  = {};
+  });
+
+  // 从 localStorage 加载已缓存的历史月份数据
+  let cacheHit = 0;
+  loadedMonths.forEach(mKey => {
+    const cached = lsLoadMonth(mKey);
+    if (cached) {
+      monthlyData[mKey] = cached.total || 0;
+      Object.entries(cached.shops || {}).forEach(([cid, amt]) => {
+        const n = Number(cid);
+        if (shopMonthlyData[n]) shopMonthlyData[n][mKey] = amt;
+      });
+      cacheHit++;
+    }
+  });
+
+  // 年度汇总（从已缓存月份累加）
+  Object.entries(monthlyData).forEach(([mKey, total]) => {
+    const yKey = mKey.slice(0, 4);
+    yearlyData[yKey] = (yearlyData[yKey] || 0) + total;
+    Object.entries(shopMonthlyData).forEach(([cid, months]) => {
+      if (months[mKey]) {
+        shopYearlyData[Number(cid)][yKey] = (shopYearlyData[Number(cid)][yKey] || 0) + months[mKey];
+      }
+    });
+  });
+  console.log(`[缓存恢复] ${cacheHit} 个月份已加载，共 ${Object.keys(monthlyData).length} 个有数据月份`);
+
+  // 初始化日数据
+  const dailyData = {};
+  days.forEach(d => { dailyData[d] = 0; });
+  const shopDailyData = {};
+  ALL_SHOPS.forEach(s => { shopDailyData[s.centerId] = {}; days.forEach(d => { shopDailyData[s.centerId][d] = 0; }); });
+
+  // ══════════════════════════════════════════════════════════
+  // 第一阶段：加载近 7 天日维度数据（7 × 28 = 196 次 API）
+  // ══════════════════════════════════════════════════════════
+  updateProgress(15, `加载近7天日数据…`);
   const dayTasks = [];
   days.forEach(d => {
     shopIds.forEach(shopId => {
       dayTasks.push(() => queryRevenue(d, 'day', API_CONFIG.centerId, shopId));
     });
   });
-  
-  // 并发查询（限制并发数）
-  const dayResults = await batchQuery(dayTasks, 20, p => updateProgress(15 + p * 0.6, `日数据 ${p}%…`));
-  
-  // 汇总日数据，并保存各门店独立数据
-  const dailyData = {};
-  days.forEach(d => { dailyData[d] = 0; });
-  
-  // 初始化各门店数据存储
-  const shopDailyData = {};
-  ALL_SHOPS.forEach(s => { shopDailyData[s.centerId] = {}; days.forEach(d => { shopDailyData[s.centerId][d] = 0; }); });
-  
-  // 诊断：检查 dayResults
-  const validResults = dayResults.filter(r => r && r.income !== undefined);
-  console.log(`[日数据诊断] 总结果:${dayResults.length} 有效:${validResults.length}`, validResults.slice(0,3));
-  
+  const dayResults = await batchQuery(dayTasks, 20, prog => updateProgress(15 + prog * 0.5, `日数据 ${prog}%…`));
+  const validDay = dayResults.filter(r => r?.income !== undefined);
+  console.log(`[日数据] 有效:${validDay.length}/${dayResults.length}`);
+
   dayResults.forEach(r => {
-    if (r?.income !== undefined && r?.settleDate && r?.shopId) {
+    if (r?.income !== undefined && r?.shopId) {
       dailyData[r.settleDate] = (dailyData[r.settleDate] || 0) + r.income;
-      // 保存各门店独立数据（使用 shopId 匹配）
-      const matched = shopDailyData[r.shopId];
-      if (matched) {
-        matched[r.settleDate] = r.income;
-      }
+      if (shopDailyData[r.shopId]) shopDailyData[r.shopId][r.settleDate] = r.income;
     }
   });
-  
-  // 【修复】将日数据汇总到月/年数据（一次性汇总，无延迟）
-  const monthlyData = {};
-  const yearlyData = {};
-  const shopMonthlyData = {};
-  const shopYearlyData = {};
-  ALL_SHOPS.forEach(s => {
-    shopMonthlyData[s.centerId] = {};
-    shopYearlyData[s.centerId] = {};
+
+  // ══════════════════════════════════════════════════════════
+  // 第二阶段：加载当前月月维度数据（28 次 API）
+  // 当前月单独用月维度加载（覆盖日维度累加，更精确）
+  // ══════════════════════════════════════════════════════════
+  updateProgress(68, `加载当月汇总…`);
+  const monthTasks = shopIds.map(shopId => () => queryRevenue(`${curYear}-${p(curMonth)}-01`, 'month', API_CONFIG.centerId, shopId));
+  const monthResults = await batchQuery(monthTasks, 28, prog => updateProgress(68 + prog * 0.3, `月汇总 ${prog}%…`));
+  const validMonth = monthResults.filter(r => r?.income !== undefined);
+  console.log(`[当前月] 有效:${validMonth.length}/${monthResults.length}`);
+
+  // 清零并重新填入当前月（避免日维度累加误差）
+  const oldCurMonth = monthlyData[curMonthKey] || 0;
+  monthlyData[curMonthKey] = 0;
+  yearlyData[String(curYear)] = Math.max(0, (yearlyData[String(curYear)] || 0) - oldCurMonth);
+  shopIds.forEach(sid => {
+    if (shopMonthlyData[sid]?.[curMonthKey]) {
+      const old = shopMonthlyData[sid][curMonthKey];
+      shopMonthlyData[sid][curMonthKey] = 0;
+      shopYearlyData[sid][String(curYear)] = Math.max(0, (shopYearlyData[sid][String(curYear)] || 0) - old);
+    }
   });
-  Object.entries(shopDailyData).forEach(([shopId, dayObj]) => {
-    Object.entries(dayObj).forEach(([date, income]) => {
-      if (income > 0) {
-        const monthKey = date.slice(0, 7);
-        const yearKey = date.slice(0, 4);
-        monthlyData[monthKey] = (monthlyData[monthKey] || 0) + income;
-        yearlyData[yearKey] = (yearlyData[yearKey] || 0) + income;
-        if (shopMonthlyData[shopId]) {
-          shopMonthlyData[shopId][monthKey] = (shopMonthlyData[shopId][monthKey] || 0) + income;
-        }
-        if (shopYearlyData[shopId]) {
-          shopYearlyData[shopId][yearKey] = (shopYearlyData[shopId][yearKey] || 0) + income;
-        }
-      }
-    });
+
+  const shopMonthTmp = {};
+  monthResults.forEach(r => {
+    if (r?.income !== undefined && r?.shopId) {
+      monthlyData[curMonthKey] = (monthlyData[curMonthKey] || 0) + r.income;
+      yearlyData[String(curYear)] = (yearlyData[String(curYear)] || 0) + r.income;
+      if (!shopMonthlyData[r.shopId]) shopMonthlyData[r.shopId] = {};
+      if (!shopYearlyData[r.shopId]) shopYearlyData[r.shopId] = {};
+      shopMonthlyData[r.shopId][curMonthKey] = (shopMonthlyData[r.shopId][curMonthKey] || 0) + r.income;
+      shopYearlyData[r.shopId][String(curYear)] = (shopYearlyData[r.shopId][String(curYear)] || 0) + r.income;
+      shopMonthTmp[r.shopId] = r.income;
+    }
   });
+
+  // 将当前月数据写入 localStorage（下次访问直接用缓存）
+  lsSaveMonth(curMonthKey, monthlyData[curMonthKey], shopMonthTmp);
+  loadedMonths.add(curMonthKey);
+  lsSaveMeta();
+
+  // 从 monthlyData 中去掉近7天中非当月的日维度数据对月/年汇总的影响
+  // （当日维度数据包含上月最后几天时，monthlyData 会被污染）
+  // 修复：只保留当前月的日数据对月汇总的贡献
+  // 注意：days 中的当月前几天已被 monthResults 覆盖，无需特殊处理
+
+  console.log(`[加载完成] 当前月 ${curMonthKey}:`, monthlyData[curMonthKey]);
   console.log('[月数据]', monthlyData);
   console.log('[门店月数据] 大蜀山:', shopMonthlyData[247421]);
 
-  // 把初始 35 天数据已覆盖的月份标记为"需要完整加载"（不标记为完整加载，
-  // 让 ensureMonthData 在首次查看时做一次完整加载以保证准确性）
-  // 注：当前月数据是实时的，标记为已加载避免反复触发
-  const curMonthKey = `${curYear}-${p(curMonth)}`;
-  loadedMonths.add(curMonthKey);
-  console.log(`[初始化] 当前月 ${curMonthKey} 标记为已加载（实时数据）`);
-  
+  updateProgress(99, '渲染中…');
   return {
     success: true,
     generatedAt: now.toISOString(),
@@ -568,7 +653,7 @@ async function loadAllData() {
     shopYearlyData,
     summary: {
       today: dailyData[today] || 0,
-      currentMonth: monthlyData[`${curYear}-${p(curMonth)}`] || 0,
+      currentMonth: monthlyData[curMonthKey] || 0,
       currentYear: yearlyData[String(curYear)] || 0,
     },
   };
@@ -603,14 +688,10 @@ async function ensureMonthData(year, month) {
     return;
   }
   loadingMonths.add(key);
-  console.log(`[加载历史月份] ${key}...`);
+  console.log(`[加载历史月份] ${key}... 使用月维度API（28请求代替784请求）`);
   try {
-    const lastDay = new Date(year, month, 0).getDate();
-    const monthDays = [];
-    for (let d = 1; d <= lastDay; d++) {
-      monthDays.push(`${year}-${p(month)}-${p(d)}`);
-    }
     const shopIds = ALL_SHOPS.map(s => s.centerId);
+    const settleDate = `${year}-${p(month)}-01`; // 月维度查询只需传当月1日
 
     // ── 先清零该月所有数据，防止重复累加 ──
     const yKey = key.slice(0, 4);
@@ -630,41 +711,31 @@ async function ensureMonthData(year, month) {
       }
     });
 
-    // ── 优先从缓存聚合，缺失日期才发 API 请求 ──
-    const missingTasks = [];
-    const cachedResults = [];
-    monthDays.forEach(d => {
-      shopIds.forEach(shopId => {
-        const cacheKey = `${API_CONFIG.centerId}_${shopId}_${d}_day`;
-        if (SHOP_DATA_CACHE[cacheKey] !== undefined) {
-          cachedResults.push(SHOP_DATA_CACHE[cacheKey]);
-        } else {
-          missingTasks.push(() => queryRevenue(d, 'day', API_CONFIG.centerId, shopId));
-        }
-      });
-    });
-    console.log(`[${key}] 缓存命中:${cachedResults.length} 需请求:${missingTasks.length}`);
+    // ── 用月维度 API 查询，每个门店只需 1 次请求（共 28 次，而非 784 次）──
+    const tasks = shopIds.map(shopId => () => queryRevenue(settleDate, 'month', API_CONFIG.centerId, shopId));
+    console.log(`[${key}] 发起月维度请求: ${tasks.length} 个门店`);
+    const results = await batchQuery(tasks, 10);
 
-    const freshResults = missingTasks.length > 0 ? await batchQuery(missingTasks, 15) : [];
-    const allResults = [...cachedResults, ...freshResults];
+    const validR = results.filter(r => r?.income > 0);
+    console.log(`[${key} 聚合诊断] 总:${results.length} 有效(income>0):${validR.length}`);
 
-    // 诊断
-    const validR = allResults.filter(r => r?.income > 0);
-    console.log(`[${key} 聚合诊断] 总:${allResults.length} 有效(income>0):${validR.length}`);
-
-    allResults.forEach(r => {
-      if (r?.income !== undefined && r?.settleDate && r?.shopId) {
-        const mKey = r.settleDate.slice(0, 7);
-        const yKey2 = r.settleDate.slice(0, 4);
-        DATA.monthlyData[mKey] = (DATA.monthlyData[mKey] || 0) + r.income;
-        DATA.yearlyData[yKey2] = (DATA.yearlyData[yKey2] || 0) + r.income;
+    const shopMonthTmp = {};
+    results.forEach(r => {
+      if (r?.income !== undefined && r?.shopId) {
+        DATA.monthlyData[key] = (DATA.monthlyData[key] || 0) + r.income;
+        DATA.yearlyData[yKey] = (DATA.yearlyData[yKey] || 0) + r.income;
         if (!DATA.shopMonthlyData[r.shopId]) DATA.shopMonthlyData[r.shopId] = {};
         if (!DATA.shopYearlyData[r.shopId]) DATA.shopYearlyData[r.shopId] = {};
-        DATA.shopMonthlyData[r.shopId][mKey] = (DATA.shopMonthlyData[r.shopId][mKey] || 0) + r.income;
-        DATA.shopYearlyData[r.shopId][yKey2] = (DATA.shopYearlyData[r.shopId][yKey2] || 0) + r.income;
+        DATA.shopMonthlyData[r.shopId][key] = (DATA.shopMonthlyData[r.shopId][key] || 0) + r.income;
+        DATA.shopYearlyData[r.shopId][yKey] = (DATA.shopYearlyData[r.shopId][yKey] || 0) + r.income;
+        shopMonthTmp[r.shopId] = r.income;
       }
     });
-    console.log(`[加载完成] ${key}:`, DATA.monthlyData[key]);
+
+    // ── 写入 localStorage，下次访问直接用缓存，无需再请求 API ──
+    lsSaveMonth(key, DATA.monthlyData[key], shopMonthTmp);
+    lsSaveMeta();
+    console.log(`[加载完成] ${key}:`, DATA.monthlyData[key], '(已写入本地缓存)');
     loadedMonths.add(key); // ✅ 标记为已完整加载
     render();
   } catch (e) {
@@ -705,18 +776,73 @@ function initSelectors() {
   const curMonth = DATA?.curMonth || (new Date().getMonth() + 1);
   const today = DATA?.today || new Date().toISOString().slice(0, 10);
 
-  const years = DATA?.availableYears || [curYear];
-  const yearOpts = years.slice().reverse().map(y => `<option value="${y}">${y}</option>`).join('');
+  const availableYears = DATA?.availableYears || [curYear];
+  const availableMonths = DATA?.availableMonths || [];
+
+  // ── 年份下拉：只显示有数据的年份 ──
+  const yearOpts = availableYears.slice().reverse().map(y => `<option value="${y}">${y}</option>`).join('');
   ['selYearA', 'selYearB', 'selYearOnly', 'selYearPrev'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = yearOpts; });
 
-  const monthOpts = MONTH_NAMES.map((m, i) => `<option value="${i + 1}">${m}</option>`).join('');
-  document.getElementById('selMonthA').innerHTML = monthOpts;
-  document.getElementById('selMonthB').innerHTML = monthOpts;
+  // ── 月份下拉：根据当前选中年份，动态过滤只显示有数据的月份 ──
+  function getMonthOpts(year) {
+    return MONTH_NAMES.map((m, i) => {
+      const key = `${year}-${p(i + 1)}`;
+      const disabled = availableMonths.includes(key) ? '' : ' disabled';
+      return `<option value="${i + 1}"${disabled}>${m}</option>`;
+    }).join('');
+  }
 
-  const latestYear = years[years.length - 1] || curYear;
-  STATE.yearA = latestYear; STATE.yearB = latestYear - 1;
-  STATE.yearOnly = latestYear; STATE.yearPrev = latestYear - 1;
-  STATE.monthA = curMonth; STATE.monthB = curMonth === 1 ? 12 : curMonth - 1;
+  // ── 默认选中最新有数据的年月 ──
+  const latestValidYear = availableYears[availableYears.length - 1] || curYear;
+  const latestYearMonths = availableMonths.filter(k => k.startsWith(String(latestValidYear) + '-'));
+  const latestValidMonth = latestYearMonths.length > 0
+    ? parseInt(latestYearMonths[latestYearMonths.length - 1].split('-')[1])
+    : curMonth;
+
+  // 年份B默认选前一个有数据的年份（如有2026和2025，默认B=2025）
+  const prevValidYear = availableYears[availableYears.length - 2] || (latestValidYear - 1);
+
+  // 辅助：找某年某月往前最近的有数据月份
+  function findPrevAvailableMonth(year, month) {
+    let y = year, m = month;
+    while (m > 0) {
+      if (availableMonths.includes(`${y}-${p(m)}`)) return { year: y, month: m };
+      m--;
+      if (m === 0) { y--; m = 12; }
+    }
+    return null;
+  }
+
+  // 同比默认值：去年同期
+  const yoyDefault = findPrevAvailableMonth(latestValidYear - 1, latestValidMonth);
+  // 环比默认值：当月上月
+  const momDefault = findPrevAvailableMonth(
+    latestValidMonth === 1 ? prevValidYear : latestValidYear,
+    latestValidMonth === 1 ? 12 : latestValidMonth - 1
+  );
+
+  STATE.yearA = latestValidYear;
+  STATE.yearB = yoyDefault ? yoyDefault.year : prevValidYear;
+  STATE.yearOnly = latestValidYear;
+  STATE.yearPrev = prevValidYear;
+  STATE.monthA = latestValidMonth;
+  STATE.monthB = yoyDefault ? yoyDefault.month : (momDefault ? momDefault.month : latestValidMonth);
+
+  // 渲染月份选项（按各自年份过滤）
+  document.getElementById('selMonthA').innerHTML = getMonthOpts(latestValidYear);
+  document.getElementById('selMonthB').innerHTML = getMonthOpts(STATE.yearB);
+
+  document.getElementById('selYearA').value = STATE.yearA;
+  document.getElementById('selYearB').value = STATE.yearB;
+  document.getElementById('selYearOnly').value = STATE.yearOnly;
+  document.getElementById('selYearPrev').value = STATE.yearPrev;
+  document.getElementById('selMonthA').value = STATE.monthA;
+  document.getElementById('selMonthB').value = STATE.monthB;
+
+  // 渲染月份选项
+  document.getElementById('selMonthA').innerHTML = getMonthOpts(latestValidYear);
+  document.getElementById('selMonthB').innerHTML = getMonthOpts(finalYearB);
+
   document.getElementById('selYearA').value = STATE.yearA;
   document.getElementById('selYearB').value = STATE.yearB;
   document.getElementById('selYearOnly').value = STATE.yearOnly;
@@ -773,14 +899,53 @@ function bindEvents() {
     });
   });
 
-  document.getElementById('selCompare').addEventListener('change', e => { STATE.compare = e.target.value; updateBSelector(); ensureMonthData(STATE.yearB, STATE.monthB); render(); });
+  document.getElementById('selCompare').addEventListener('change', e => {
+    STATE.compare = e.target.value;
+    updateBSelector();
+    updateMonthOpts(STATE.yearB, 'selMonthB');
+    document.getElementById('selMonthB').value = STATE.monthB;
+    ensureMonthData(STATE.yearB, STATE.monthB);
+    render();
+  });
 
   // 日维度固定使用同比，selDayCompare 已移除，无需监听
 
-  document.getElementById('selYearA').addEventListener('change', e => { STATE.yearA = +e.target.value; updateBSelector(); ensureMonthData(STATE.yearA, STATE.monthA); render(); });
-  document.getElementById('selYearB').addEventListener('change', e => { STATE.yearB = +e.target.value; ensureMonthData(STATE.yearB, STATE.monthB); render(); });
-  document.getElementById('selMonthA').addEventListener('change', e => { STATE.monthA = +e.target.value; updateBSelector(); ensureMonthData(STATE.yearA, STATE.monthA); render(); });
-  document.getElementById('selMonthB').addEventListener('change', e => { STATE.monthB = +e.target.value; ensureMonthData(STATE.yearB, STATE.monthB); render(); });
+  // 根据选中年份动态过滤月份选项（只显示有数据的月份）
+  function updateMonthOpts(year, selId) {
+    const el = document.getElementById(selId);
+    if (!el) return;
+    const availableMonths = DATA?.availableMonths || [];
+    el.innerHTML = MONTH_NAMES.map((m, i) => {
+      const key = `${year}-${p(i + 1)}`;
+      const disabled = availableMonths.includes(key) ? '' : ' disabled';
+      return `<option value="${i + 1}"${disabled}>${m}</option>`;
+    }).join('');
+  }
+
+  document.getElementById('selYearA').addEventListener('change', e => {
+    STATE.yearA = +e.target.value;
+    updateMonthOpts(STATE.yearA, 'selMonthA');
+    updateBSelector();
+    ensureMonthData(STATE.yearA, STATE.monthA);
+    render();
+  });
+  document.getElementById('selYearB').addEventListener('change', e => {
+    STATE.yearB = +e.target.value;
+    updateMonthOpts(STATE.yearB, 'selMonthB');
+    ensureMonthData(STATE.yearB, STATE.monthB);
+    render();
+  });
+  document.getElementById('selMonthA').addEventListener('change', e => {
+    STATE.monthA = +e.target.value;
+    updateBSelector();
+    ensureMonthData(STATE.yearA, STATE.monthA);
+    render();
+  });
+  document.getElementById('selMonthB').addEventListener('change', e => {
+    STATE.monthB = +e.target.value;
+    ensureMonthData(STATE.yearB, STATE.monthB);
+    render();
+  });
   document.getElementById('selYearOnly').addEventListener('change', e => { STATE.yearOnly = +e.target.value; render(); });
   document.getElementById('selYearPrev').addEventListener('change', e => { STATE.yearPrev = +e.target.value; render(); });
 
@@ -822,14 +987,20 @@ function bindEvents() {
 function updateBSelector() {
   if (STATE.dim === 'month') {
     const isMom = STATE.compare === 'mom';
+    const availableMonths = DATA?.availableMonths || [];
     document.getElementById('selYearB').style.display = isMom ? '' : 'none';
     document.getElementById('lblYearB').style.display = isMom ? '' : 'none';
     document.getElementById('selMonthB').style.display = isMom ? '' : 'none';
     if (isMom) {
       // 环比：上一个月，若当期是1月则年份也往前一年
-      STATE.monthB = STATE.monthA === 1 ? 12 : STATE.monthA - 1;
-      STATE.yearB = STATE.monthA === 1 ? STATE.yearA - 1 : STATE.yearA;
+      let mB = STATE.monthA === 1 ? 12 : STATE.monthA - 1;
+      let yB = STATE.monthA === 1 ? STATE.yearA - 1 : STATE.yearA;
+      // 若目标月份无数据，尝试再往前找
+      while (mB > 0 && !availableMonths.includes(`${yB}-${p(mB)}`)) { mB--; if (mB === 0) { yB--; mB = 12; } }
+      STATE.yearB = yB;
+      STATE.monthB = mB;
       document.getElementById('selYearB').value = STATE.yearB;
+      updateMonthOpts(STATE.yearB, 'selMonthB');
       document.getElementById('selMonthB').value = STATE.monthB;
     } else {
       STATE.yearB = STATE.yearA - 1;
