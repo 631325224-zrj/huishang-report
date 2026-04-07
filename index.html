@@ -839,17 +839,6 @@ function initSelectors() {
   document.getElementById('selMonthA').value = STATE.monthA;
   document.getElementById('selMonthB').value = STATE.monthB;
 
-  // 渲染月份选项
-  document.getElementById('selMonthA').innerHTML = getMonthOpts(latestValidYear);
-  document.getElementById('selMonthB').innerHTML = getMonthOpts(finalYearB);
-
-  document.getElementById('selYearA').value = STATE.yearA;
-  document.getElementById('selYearB').value = STATE.yearB;
-  document.getElementById('selYearOnly').value = STATE.yearOnly;
-  document.getElementById('selYearPrev').value = STATE.yearPrev;
-  document.getElementById('selMonthA').value = STATE.monthA;
-  document.getElementById('selMonthB').value = STATE.monthB;
-
   const maxDate = DATA?.dailyDates ? DATA.dailyDates[DATA.dailyDates.length - 1] : today;
   document.getElementById('dateA').value = today; document.getElementById('dateA').max = maxDate;
   const prevD = prevYearDate(today);
