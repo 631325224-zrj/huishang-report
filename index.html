@@ -773,7 +773,7 @@ function bindEvents() {
     });
   });
 
-  document.getElementById('selCompare').addEventListener('change', e => { STATE.compare = e.target.value; updateBSelector(); render(); });
+  document.getElementById('selCompare').addEventListener('change', e => { STATE.compare = e.target.value; updateBSelector(); ensureMonthData(STATE.yearB, STATE.monthB); render(); });
 
   // 日维度固定使用同比，selDayCompare 已移除，无需监听
 
@@ -826,8 +826,9 @@ function updateBSelector() {
     document.getElementById('lblYearB').style.display = isMom ? '' : 'none';
     document.getElementById('selMonthB').style.display = isMom ? '' : 'none';
     if (isMom) {
-      STATE.yearB = STATE.yearA;
+      // 环比：上一个月，若当期是1月则年份也往前一年
       STATE.monthB = STATE.monthA === 1 ? 12 : STATE.monthA - 1;
+      STATE.yearB = STATE.monthA === 1 ? STATE.yearA - 1 : STATE.yearA;
       document.getElementById('selYearB').value = STATE.yearB;
       document.getElementById('selMonthB').value = STATE.monthB;
     } else {
