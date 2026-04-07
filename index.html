@@ -802,13 +802,15 @@ function initSelectors() {
   // 年份B默认选前一个有数据的年份（如有2026和2025，默认B=2025）
   const prevValidYear = availableYears[availableYears.length - 2] || (latestValidYear - 1);
 
-  // 辅助：找某年某月往前最近的有数据月份
+  // 辅助：找某年某月往前最近的有数据月份（含边界保护）
   function findPrevAvailableMonth(year, month) {
+    const minYear = Math.min(...availableYears);
     let y = year, m = month;
     while (m > 0) {
       if (availableMonths.includes(`${y}-${p(m)}`)) return { year: y, month: m };
       m--;
       if (m === 0) { y--; m = 12; }
+      if (y < minYear) return null; // 防止死循环
     }
     return null;
   }
