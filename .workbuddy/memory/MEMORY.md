@@ -112,6 +112,10 @@
 **案例**：修复重复累加时清零了 2月数据，但清零后 key 未删除，下次判断 `key in DATA.monthlyData` 为 true 直接跳过加载。
 **解决方案**：用独立的 `loadedMonths` Set 记录"已完整加载"状态，不依赖数据值/key存在来判断是否加载过。
 
+### 8. localStorage 脏缓存 key 错误（2026-04-08 新增）
+**问题**：bug 期间把错误年份的 key（如 `2025-03` 实为 `2026-03`）写入了 localStorage，后续刷新从缓存读到错误数据。
+**解决方案**：`lsRestoreMonths` 加校验逻辑：年份须在 onlineYear~curYear 范围内，不能是未来月份，格式须为 `YYYY-MM`。发现非法 key 自动从 localStorage 删除。
+
 ### 7. 数据重复累加（2026-04-05 新增）
 **问题**：初始加载已包含某月部分数据，ensureMonthData 加载完整月份时未清除旧数据，导致累加变大。
 **案例**：初始 35 天数据包含 2 月 6-28 日，ensureMonthData 加载完整 2 月时再次累加，导致数值偏大（如 1374131 而非 692168）。
