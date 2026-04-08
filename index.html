@@ -458,9 +458,35 @@ function lsSet(key, val) {
 }
 
 function lsRestoreMonths() {
-  // 从 localStorage 恢复已加载月份列表
+  // 从 localStorage 恢复已加载月份列表，并清理非法 key（防止历史 bug 写入的脏数据）
   const meta = lsGet(LS_META, { loadedMonths: [] });
-  meta.loadedMonths.forEach(m => loadedMonths.add(m));
+  const now = new Date();
+  const curYearNum = now.getFullYear();
+  const curMonthNum = now.getMonth() + 1;
+  const validKeys = [];
+  const cache = lsGet(LS_MONTHLY, {});
+  let dirtyCount = 0;
+
+  meta.loadedMonths.forEach(m => {
+    // 合法格式：YYYY-MM，年份在 onlineYear~curYear 之间，月份1-12
+    const match = String(m).match(/^(\d{4})-(\d{2})$/);
+    if (!match) { dirtyCount++; return; }
+    const y = parseInt(match[1]), mo = parseInt(match[2]);
+    if (y < API_CONFIG.onlineYear || y > curYearNum + 1 || mo < 1 || mo > 12) { dirtyCount++; return; }
+    // 不能是"未来月份"（超过当前月）
+    if (y > curYearNum || (y === curYearNum && mo > curMonthNum)) { dirtyCount++; return; }
+    validKeys.push(m);
+    loadedMonths.add(m);
+  });
+
+  // 同步清理 localStorage 中对应的脏数据
+  if (dirtyCount > 0) {
+    const cleanCache = {};
+    validKeys.forEach(k => { if (cache[k]) cleanCache[k] = cache[k]; });
+    lsSet(LS_MONTHLY, cleanCache);
+    lsSet(LS_META, { loadedMonths: validKeys });
+    console.warn(`[缓存清理] 发现并删除 ${dirtyCount} 个非法缓存 key`);
+  }
   console.log(`[缓存恢复] ${loadedMonths.size} 个历史月份已从本地缓存加载`);
 }
 
@@ -625,16 +651,52 @@ async function loadAllData() {
   loadedMonths.add(curMonthKey);
   lsSaveMeta();
 
-  // 从 monthlyData 中去掉近7天中非当月的日维度数据对月/年汇总的影响
-  // （当日维度数据包含上月最后几天时，monthlyData 会被污染）
-  // 修复：只保留当前月的日数据对月汇总的贡献
-  // 注意：days 中的当月前几天已被 monthResults 覆盖，无需特殊处理
-
   console.log(`[加载完成] 当前月 ${curMonthKey}:`, monthlyData[curMonthKey]);
   console.log('[月数据]', monthlyData);
   console.log('[门店月数据] 大蜀山:', shopMonthlyData[247421]);
 
-  updateProgress(99, '渲染中…');
+  // ══════════════════════════════════════════════════════════
+  // 第三阶段：预加载上个月（环比默认对比月），避免用户切换时等待
+  // ══════════════════════════════════════════════════════════
+  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevYear = prevMonthDate.getFullYear();
+  const prevMonth = prevMonthDate.getMonth() + 1;
+  const prevMonthKey = `${prevYear}-${p(prevMonth)}`;
+  // 只有上月在系统上线范围内且未缓存时才加载
+  const isOnline = prevYear > API_CONFIG.onlineYear || (prevYear === API_CONFIG.onlineYear && prevMonth >= API_CONFIG.onlineMonth);
+  if (isOnline && !loadedMonths.has(prevMonthKey)) {
+    updateProgress(99, `预加载上月 ${prevMonthKey}…`);
+    try {
+      const prevTasks = shopIds.map(sid => () => queryRevenue(`${prevYear}-${p(prevMonth)}-01`, 'month', API_CONFIG.centerId, sid));
+      const prevResults = await batchQuery(prevTasks, 28, () => {});
+      const validPrev = prevResults.filter(r => r?.income !== undefined && r.income > 0);
+      console.log(`[预加载] ${prevMonthKey} 聚合: 总:${prevResults.length} 有效(income>0):${validPrev.length}`);
+      if (validPrev.length > 0) {
+        monthlyData[prevMonthKey] = 0;
+        const prevYKey = String(prevYear);
+        const prevShopTmp = {};
+        prevResults.forEach(r => {
+          if (r?.income !== undefined && r?.shopId) {
+            monthlyData[prevMonthKey] = (monthlyData[prevMonthKey] || 0) + r.income;
+            yearlyData[prevYKey] = (yearlyData[prevYKey] || 0) + r.income;
+            if (!shopMonthlyData[r.shopId]) shopMonthlyData[r.shopId] = {};
+            if (!shopYearlyData[r.shopId]) shopYearlyData[r.shopId] = {};
+            shopMonthlyData[r.shopId][prevMonthKey] = (shopMonthlyData[r.shopId][prevMonthKey] || 0) + r.income;
+            shopYearlyData[r.shopId][prevYKey] = (shopYearlyData[r.shopId][prevYKey] || 0) + r.income;
+            prevShopTmp[r.shopId] = r.income;
+          }
+        });
+        lsSaveMonth(prevMonthKey, monthlyData[prevMonthKey], prevShopTmp);
+        loadedMonths.add(prevMonthKey);
+        lsSaveMeta();
+        console.log(`[预加载完成] ${prevMonthKey}:`, monthlyData[prevMonthKey]);
+      }
+    } catch (e) {
+      console.warn(`[预加载失败] ${prevMonthKey}`, e);
+    }
+  }
+
+  updateProgress(100, '完成');
   return {
     success: true,
     generatedAt: now.toISOString(),
