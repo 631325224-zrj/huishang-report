@@ -901,18 +901,6 @@ function bindEvents() {
 
   // 日维度固定使用同比，selDayCompare 已移除，无需监听
 
-  // 根据选中年份动态过滤月份选项（只显示有数据的月份）
-  function updateMonthOpts(year, selId) {
-    const el = document.getElementById(selId);
-    if (!el) return;
-    const availableMonths = DATA?.availableMonths || [];
-    el.innerHTML = MONTH_NAMES.map((m, i) => {
-      const key = `${year}-${p(i + 1)}`;
-      const disabled = availableMonths.includes(key) ? '' : ' disabled';
-      return `<option value="${i + 1}"${disabled}>${m}</option>`;
-    }).join('');
-  }
-
   document.getElementById('selYearA').addEventListener('change', e => {
     STATE.yearA = +e.target.value;
     updateMonthOpts(STATE.yearA, 'selMonthA');
@@ -975,6 +963,18 @@ function bindEvents() {
   });
 }
 
+// ════════ 月份选项动态过滤（全局，根据年份只显示有数据的月份）════════
+function updateMonthOpts(year, selId) {
+  const el = document.getElementById(selId);
+  if (!el) return;
+  const availableMonths = DATA?.availableMonths || [];
+  el.innerHTML = MONTH_NAMES.map((m, i) => {
+    const key = `${year}-${p(i + 1)}`;
+    const disabled = availableMonths.includes(key) ? '' : ' disabled';
+    return `<option value="${i + 1}"${disabled}>${m}</option>`;
+  }).join('');
+}
+
 function updateBSelector() {
   if (STATE.dim === 'month') {
     const isMom = STATE.compare === 'mom';
@@ -986,8 +986,12 @@ function updateBSelector() {
       // 环比：上一个月，若当期是1月则年份也往前一年
       let mB = STATE.monthA === 1 ? 12 : STATE.monthA - 1;
       let yB = STATE.monthA === 1 ? STATE.yearA - 1 : STATE.yearA;
-      // 若目标月份无数据，尝试再往前找
-      while (mB > 0 && !availableMonths.includes(`${yB}-${p(mB)}`)) { mB--; if (mB === 0) { yB--; mB = 12; } }
+      // 若目标月份无数据，尝试再往前找（加下界保护防死循环）
+      const minYear = DATA?.availableYears ? Math.min(...DATA.availableYears) : yB - 2;
+      let safety = 0;
+      while (!availableMonths.includes(`${yB}-${p(mB)}`) && yB >= minYear && safety++ < 24) {
+        mB--; if (mB === 0) { yB--; mB = 12; }
+      }
       STATE.yearB = yB;
       STATE.monthB = mB;
       document.getElementById('selYearB').value = STATE.yearB;
