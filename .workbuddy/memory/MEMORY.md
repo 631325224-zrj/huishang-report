@@ -116,6 +116,13 @@
 **问题**：bug 期间把错误年份的 key（如 `2025-03` 实为 `2026-03`）写入了 localStorage，后续刷新从缓存读到错误数据。
 **解决方案**：`lsRestoreMonths` 加校验逻辑：年份须在 onlineYear~curYear 范围内，不能是未来月份，格式须为 `YYYY-MM`。发现非法 key 自动从 localStorage 删除。
 
+### 9. 同比加载无效历史年份导致数据错乱（2026-04-08 新增）
+**问题**：初始 `STATE.compare='yoy'`，`STATE.yearB=2025`，`render()` 触发 `ensureMonthData(2025, month)`，API 不支持真实历史年份，实际返回当前月数据，被存入 `2025-XX` 错误 key，导致数据混乱。
+**解决方案**：
+1. `ensureMonthData` 头部增加年份校验：年份须 `>= onlineYear` 且 `<= 当前年`，否则跳过
+2. `render()` 里同比（yoy）模式不触发 `ensureMonthData`，只有环比（mom）才触发
+**教训**：API 只能查询系统上线后的数据，调用前必须校验年份合法性。
+
 ### 7. 数据重复累加（2026-04-05 新增）
 **问题**：初始加载已包含某月部分数据，ensureMonthData 加载完整月份时未清除旧数据，导致累加变大。
 **案例**：初始 35 天数据包含 2 月 6-28 日，ensureMonthData 加载完整 2 月时再次累加，导致数值偏大（如 1374131 而非 692168）。
