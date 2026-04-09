@@ -427,72 +427,99 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   }
   
   const monthStr = `${year}-${p(month)}`;
-  const dateType = 2;  // 账单维度
+  const dateType = 1;  // 营业日维度（与文档统计口径一致）
   const pageSize = 500;  // 每页数量
-  let pageNo = 1;
+  
+  // 计算该月的天数
+  const daysInMonth = new Date(year, month, 0).getDate();
   
   let totalIncome = 0;
   const shops = {};  // { shopId: { name, income } }
   
-  // 分页获取所有账单
-  while (true) {
-    const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-1&dateType=${dateType}&pageNo=${pageNo}&pageSize=${pageSize}`;
+    // 逐日查询整个月的数据
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${p(month)}-${p(day)}`;
+    let pageNo = 1;
     
-    let json, lastError;
-    for (let retry = 0; retry < 2; retry++) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-      try {
-        const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getserialdata?${qs}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'access_token': token,
-            'accessid': API_CONFIG.accessId,
-            'granttype': 'client'
-          },
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        json = await res.json();
+    // 分页获取当天所有账单
+    while (true) {
+      // 调试：打印查询参数（仅day=1时）
+      if (day === 1 && pageNo === 1) {
+        console.log(`[账单API调试] 查询参数: centerId=${centerId}, shopId=${shopId}, settleDate=${dateStr}`);
+      }
+      // centerId=总部ID，shopId=门店ID
+      const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${dateStr}&dateType=${dateType}&pageNo=${pageNo}&pageSize=${pageSize}`;
+      
+      let json, lastError;
+      for (let retry = 0; retry < 2; retry++) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        try {
+          const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getserialdata?${qs}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'access_token': token,
+              'accessid': API_CONFIG.accessId,
+              'granttype': 'client'
+            },
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          json = await res.json();
+          break;
+        } catch (e) {
+          clearTimeout(timeoutId);
+          lastError = e;
+          if (e.name !== 'AbortError') throw e;
+          console.warn(`[账单API超时，重试] ${dateStr} 页${pageNo} (第${retry + 1}次)`);
+        }
+      }
+      if (!json) {
+        console.warn(`[账单API跳过] ${dateStr} 页${pageNo}: ${lastError?.message || lastError}`);
         break;
-      } catch (e) {
-        clearTimeout(timeoutId);
-        lastError = e;
-        if (e.name !== 'AbortError') throw e;
-        console.warn(`[账单API超时，重试] ${monthStr} 页${pageNo} (第${retry + 1}次)`);
       }
-    }
-    if (!json) throw lastError;
-    
-    const billList = json?.data?.billList || [];
-    const pageInfo = json?.data?.pageInfo || {};
-    
-    // 按业务日期过滤当月数据
-    for (const bill of billList) {
-      const bizDate = bill.settle_biz_date;
-      if (!bizDate || !bizDate.startsWith(monthStr)) continue;
       
-      const income = parseFloat(bill.income_total) || 0;
-      const sid = bill.shop_id || bill.shopId;
-      const sname = bill.shop_name || bill.shopName || `门店${sid}`;
+      const billList = json?.data?.billList || [];
+      const pageInfo = json?.data?.pageInfo || {};
       
-      totalIncome += income;
-      if (!shops[sid]) {
-        shops[sid] = { name: sname, income: 0 };
+      // 调试：分析第一条数据的字段（仅 day=1, pageNo=1 时）
+      if (day === 1 && pageNo === 1 && billList.length > 0) {
+        const b0 = billList[0];
+        // 分析可能的纯收字段
+        const candidateIncome = (parseFloat(b0.last_total)||0) - (parseFloat(b0.not_income_money)||0);
+        console.log(`[账单API调试] ${dateStr} 字段分析:`);
+        console.log(`  item_income_total=${b0.item_income_total} | last_total=${b0.last_total} | not_income_money=${b0.not_income_money}`);
+        console.log(`  候选纯收(last_total-not_income_money)=${candidateIncome}`);
+        console.log(`  total_records=${pageInfo.pageTotal || 1}页`);
       }
-      shops[sid].income += income;
+      
+      // 累加每条账单的纯收金额
+      // 纯收 = last_total（实收） - not_income_money（非收入）
+      for (const bill of billList) {
+        const lastTotal = parseFloat(bill.last_total) || 0;
+        const notIncome = parseFloat(bill.not_income_money) || 0;
+        const income = lastTotal - notIncome;
+        const sid = bill.shop_id || bill.shopId || bill.center_id || shopId;
+        const sname = bill.shop_name || bill.shopName || `门店${sid}`;
+        
+        totalIncome += income;
+        if (!shops[sid]) {
+          shops[sid] = { name: sname, income: 0 };
+        }
+        shops[sid].income += income;
+      }
+      
+      // 检查是否还有下一页
+      const totalPages = pageInfo.pageTotal || 1;
+      if (pageNo >= totalPages || billList.length === 0) break;
+      pageNo++;
     }
-    
-    // 检查是否还有下一页
-    const totalPages = pageInfo.pageTotal || 1;
-    if (pageNo >= totalPages || billList.length === 0) break;
-    pageNo++;
   }
   
   const result = { totalIncome, shops, monthStr };
   SHOP_DATA_CACHE[cacheKey] = result;
-  console.log(`[账单API] ${monthStr} 汇总: 总纯收=${totalIncome.toFixed(2)}, 门店数=${Object.keys(shops).length}`);
+  console.log(`[账单API] ${monthStr} 汇总: 总纯收=${totalIncome.toFixed(2)}, 门店数=${Object.keys(shops).length}, 查询天数=${daysInMonth}`);
   return result;
 }
 
@@ -631,6 +658,20 @@ function lsClearOldCache() {
   
   console.log('[缓存清理] 旧缓存已清理，将使用新的账单API重新加载数据');
   loadedMonths.clear();
+  
+  // 同时清空内存中的账单API缓存和数据，确保使用新的账单API重新获取数据
+  Object.keys(SHOP_DATA_CACHE).forEach(k => delete SHOP_DATA_CACHE[k]);
+  if (DATA) {
+    if (DATA.monthlyData) Object.keys(DATA.monthlyData).forEach(k => delete DATA.monthlyData[k]);
+    if (DATA.shopMonthlyData) Object.keys(DATA.shopMonthlyData).forEach(sid => {
+      if (DATA.shopMonthlyData[sid]) Object.keys(DATA.shopMonthlyData[sid]).forEach(k => delete DATA.shopMonthlyData[sid][k]);
+    });
+    if (DATA.yearlyData) Object.keys(DATA.yearlyData).forEach(k => delete DATA.yearlyData[k]);
+    if (DATA.shopYearlyData) Object.keys(DATA.shopYearlyData).forEach(sid => {
+      if (DATA.shopYearlyData[sid]) Object.keys(DATA.shopYearlyData[sid]).forEach(k => delete DATA.shopYearlyData[sid][k]);
+    });
+  }
+  console.log('[缓存清理] 已清空所有内存缓存（SHOP_DATA_CACHE 和 DATA.*）');
 }
 
 async function loadAllData() {
@@ -778,7 +819,7 @@ async function loadAllData() {
     }
   });
 
-  console.log(`[当前月账单API] ${curMonthKey}: 总纯收=${monthlyData[curMonthKey]:.2f}, 参与门店=${Object.keys(shopMonthTmp).length}`);
+  console.log(`[当前月账单API] ${curMonthKey}: 总纯收=${monthlyData[curMonthKey].toFixed(2)}, 参与门店=${Object.keys(shopMonthTmp).length}`);
 
   // 将当前月数据写入 localStorage（下次访问直接用缓存）
   lsSaveMonth(curMonthKey, monthlyData[curMonthKey], shopMonthTmp);
@@ -790,46 +831,59 @@ async function loadAllData() {
   console.log('[门店月数据] 大蜀山:', shopMonthlyData[247421]);
 
   // ══════════════════════════════════════════════════════════
-  // 第三阶段：预加载上个月（环比默认对比月），使用账单API获取整月数据
+  // 第三阶段：预加载上月和上上月（保证初始环比视图直接可用）
+  // 当前4月时，初始默认显示"3月 环比 2月"，两个月都需要预加载
   // ══════════════════════════════════════════════════════════
   const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const prevYear = prevMonthDate.getFullYear();
   const prevMonth = prevMonthDate.getMonth() + 1;
   const prevMonthKey = `${prevYear}-${p(prevMonth)}`;
-  // 只有上月在系统上线范围内且未缓存时才加载
-  const isOnline = prevYear > API_CONFIG.onlineYear || (prevYear === API_CONFIG.onlineYear && prevMonth >= API_CONFIG.onlineMonth);
-  if (isOnline && !loadedMonths.has(prevMonthKey)) {
-    updateProgress(99, `预加载上月 ${prevMonthKey}…`);
+
+  // 上上月（环比对比月）
+  const prev2MonthDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+  const prev2Year = prev2MonthDate.getFullYear();
+  const prev2Month = prev2MonthDate.getMonth() + 1;
+  const prev2MonthKey = `${prev2Year}-${p(prev2Month)}`;
+
+  // 需要预加载的月份列表（去除已加载的）
+  const preloadList = [];
+  for (const [py, pm, pk] of [[prevYear, prevMonth, prevMonthKey], [prev2Year, prev2Month, prev2MonthKey]]) {
+    const isOnline = py > API_CONFIG.onlineYear || (py === API_CONFIG.onlineYear && pm >= API_CONFIG.onlineMonth);
+    if (isOnline && !loadedMonths.has(pk)) preloadList.push([py, pm, pk]);
+  }
+
+  for (const [py, pm, pk] of preloadList) {
+    updateProgress(99, `预加载 ${pk}…`);
     try {
-      const prevTasks = shopIds.map(sid => () => queryMonthBillList(prevYear, prevMonth, API_CONFIG.centerId, sid));
+      const prevTasks = shopIds.map(sid => () => queryMonthBillList(py, pm, API_CONFIG.centerId, sid));
       const prevResults = await batchQuery(prevTasks, 5, () => {});
-      const prevYKey = String(prevYear);
+      const prevYKey = String(py);
       const prevShopTmp = {};
       prevResults.forEach(result => {
         if (result?.shops) {
           Object.entries(result.shops).forEach(([sid, shopData]) => {
             const n = Number(sid);
             if (shopData.income > 0) {
-              monthlyData[prevMonthKey] = (monthlyData[prevMonthKey] || 0) + shopData.income;
+              monthlyData[pk] = (monthlyData[pk] || 0) + shopData.income;
               yearlyData[prevYKey] = (yearlyData[prevYKey] || 0) + shopData.income;
               if (!shopMonthlyData[n]) shopMonthlyData[n] = {};
               if (!shopYearlyData[n]) shopYearlyData[n] = {};
-              shopMonthlyData[n][prevMonthKey] = (shopMonthlyData[n][prevMonthKey] || 0) + shopData.income;
+              shopMonthlyData[n][pk] = (shopMonthlyData[n][pk] || 0) + shopData.income;
               shopYearlyData[n][prevYKey] = (shopYearlyData[n][prevYKey] || 0) + shopData.income;
               prevShopTmp[n] = (prevShopTmp[n] || 0) + shopData.income;
             }
           });
         }
       });
-      console.log(`[预加载] ${prevMonthKey}: 总纯收=${monthlyData[prevMonthKey]:.2f}, 参与门店=${Object.keys(prevShopTmp).length}`);
+      console.log(`[预加载] ${pk}: 总纯收=${(monthlyData[pk] || 0).toFixed(2)}, 参与门店=${Object.keys(prevShopTmp).length}`);
       if (Object.keys(prevShopTmp).length > 0) {
-        lsSaveMonth(prevMonthKey, monthlyData[prevMonthKey], prevShopTmp);
-        loadedMonths.add(prevMonthKey);
+        lsSaveMonth(pk, monthlyData[pk], prevShopTmp);
+        loadedMonths.add(pk);
         lsSaveMeta();
-        console.log(`[预加载完成] ${prevMonthKey}:`, monthlyData[prevMonthKey]);
+        console.log(`[预加载完成] ${pk}:`, monthlyData[pk]);
       }
     } catch (e) {
-      console.warn(`[预加载失败] ${prevMonthKey}`, e);
+      console.warn(`[预加载失败] ${pk}`, e);
     }
   }
 
@@ -943,7 +997,7 @@ async function ensureMonthData(year, month) {
       }
     });
 
-    console.log(`[${key} 账单API聚合] 总纯收: ${DATA.monthlyData[key]:.2f}, 参与门店数: ${Object.keys(shopMonthTmp).length}`);
+    console.log(`[${key} 账单API聚合] 总纯收: ${DATA.monthlyData[key].toFixed(2)}, 参与门店数: ${Object.keys(shopMonthTmp).length}`);
 
     // ── 写入 localStorage，下次访问直接用缓存，无需再请求 API ──
     lsSaveMonth(key, DATA.monthlyData[key], shopMonthTmp);
