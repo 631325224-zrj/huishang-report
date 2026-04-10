@@ -1229,6 +1229,7 @@ function updateBSelector() {
 }
 
 // ════════ 渲染汇总卡片 ════════
+let _yearRenderResolve = null; // 年报加载完毕后回调
 function renderSummary() {
   // 确定当前查看范围对应的 centerId
   let shopCenterId = null;
@@ -1248,20 +1249,35 @@ function renderSummary() {
     // 同比（yoy）：去年数据 API 不可靠，跳过自动加载，显示 — 即可
   } else if (STATE.dim === 'year') {
     // 年报：需要加载选中年份的全部有效月份（不能只加载1月）
+    // 收集所有需要加载的月份 Promise，等全部完成后再渲染
     const curYearNow = DATA?.curYear || new Date().getFullYear();
     const curMonthNow = DATA?.curMonth || (new Date().getMonth() + 1);
-    // yearOnly 的有效月份范围
     const yOnlyMaxMonth = (STATE.yearOnly === curYearNow) ? curMonthNow : 12;
     const yOnlyMinMonth = (STATE.yearOnly === API_CONFIG.onlineYear) ? API_CONFIG.onlineMonth : 1;
-    for (let m = yOnlyMinMonth; m <= yOnlyMaxMonth; m++) {
-      ensureMonthData(STATE.yearOnly, m);
-    }
-    // yearPrev 的有效月份范围（通常是上一年）
     const yPrevMaxMonth = (STATE.yearPrev === curYearNow) ? curMonthNow : 12;
     const yPrevMinMonth = (STATE.yearPrev === API_CONFIG.onlineYear) ? API_CONFIG.onlineMonth : 1;
-    for (let m = yPrevMinMonth; m <= yPrevMaxMonth; m++) {
-      ensureMonthData(STATE.yearPrev, m);
+
+    const promises = [];
+    for (let m = yOnlyMinMonth; m <= yOnlyMaxMonth; m++) {
+      promises.push(ensureMonthData(STATE.yearOnly, m));
     }
+    for (let m = yPrevMinMonth; m <= yPrevMaxMonth; m++) {
+      promises.push(ensureMonthData(STATE.yearPrev, m));
+    }
+
+    // 显示加载中状态
+    const loadingEl = document.getElementById('month-loading');
+    if (loadingEl) {
+      loadingEl.style.display = '';
+      loadingEl.textContent = `↻ 加载年报数据（${promises.length} 个月）…`;
+    }
+
+    // 等所有月份加载完毕后统一渲染
+    Promise.all(promises).then(() => {
+      if (loadingEl) loadingEl.style.display = 'none';
+      renderYearTable();
+    });
+    return; // 等待异步完成后再渲染，暂不渲染
   }
 
   const revA = getSummaryRevenue(true, shopCenterId);
