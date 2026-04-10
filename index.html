@@ -1281,7 +1281,7 @@ function renderSummary() {
     // 等所有月份加载完毕后统一渲染
     Promise.all(promises).then(() => {
       if (loadingEl) loadingEl.style.display = 'none';
-      renderYearTable();
+      renderTable();
     });
     return; // 等待异步完成后再渲染，暂不渲染
   }
