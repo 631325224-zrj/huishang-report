@@ -698,11 +698,18 @@ async function loadAllData() {
     yearlyData[yKey] = (yearlyData[yKey] || 0) + total;
     Object.entries(shopMonthlyData).forEach(([cid, months]) => {
       if (months[mKey]) {
-        shopYearlyData[Number(cid)][yKey] = (shopYearlyData[Number(cid)][yKey] || 0) + months[mKey];
+        // 用 ?? 0 确保 undefined 时不减法仍能正确赋初始值
+        shopYearlyData[Number(cid)][yKey] = (shopYearlyData[Number(cid)][yKey] ?? 0) + months[mKey];
       }
     });
   });
   console.log(`[缓存恢复] ${cacheHit} 个月份已加载，共 ${Object.keys(monthlyData).length} 个有数据月份`);
+  // 诊断：打印广安门店(247412)各年份年度汇总
+  const guanAnSid = 247412;
+  ['2025','2026'].forEach(y => {
+    const v = shopYearlyData[guanAnSid]?.[y];
+    console.log(`[诊断] 广安门店 ${y} 年度汇总: ${v} (${typeof v})`);
+  });
 
   // 初始化日数据
   const dailyData = {};
@@ -918,9 +925,8 @@ async function ensureMonthData(year, month) {
       if (shopMonth && shopMonth[key]) {
         const oldShop = shopMonth[key];
         shopMonth[key] = 0;
-        if (DATA.shopYearlyData[sid]?.[yKey] !== undefined) {
-          DATA.shopYearlyData[sid][yKey] = Math.max(0, DATA.shopYearlyData[sid][yKey] - oldShop);
-        }
+        // 用 ?? 0 确保 undefined 时不减法也能正确赋初始值
+        DATA.shopYearlyData[sid][yKey] = Math.max(0, (DATA.shopYearlyData[sid][yKey] ?? 0) - oldShop);
       }
     });
 
