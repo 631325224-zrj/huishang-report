@@ -20,6 +20,8 @@ body { font-family: "Microsoft YaHei","PingFang SC","SimSun",sans-serif; backgro
 .ctrl-panel { background: #fff; border-radius: 12px; padding: 12px 18px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
 .ctrl-group { display: flex; align-items: center; gap: 6px; }
 .ctrl-label { font-size: 12px; color: #888; font-weight: 500; white-space: nowrap; }
+.ctrl-loading { font-size: 12px; color: #C0392B; font-weight: 500; padding: 4px 10px; background: #FEF2F2; border-radius: 6px; border: 1px solid #FECACA; animation: pulse 1.5s ease-in-out infinite; white-space: nowrap; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 select, input[type="date"] { border: 1px solid #ddd; border-radius: 6px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none; background: #fff; cursor: pointer; transition: border-color 0.2s; }
 select:focus, input:focus { border-color: #C0392B; }
 select { min-width: 80px; }
@@ -83,10 +85,14 @@ tr.grandtot:hover td { background: #ffe680 !important; }
 #loading-mask { position: fixed; inset: 0; background: rgba(255,255,255,0.97); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; gap: 20px; }
 .spinner { width: 52px; height: 52px; border: 5px solid #f0f0f0; border-top-color: #C0392B; border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.loading-text { font-size: 16px; color: #888; font-weight: 500; }
-.loading-sub { font-size: 12px; color: #bbb; max-width: 400px; text-align: center; line-height: 1.6; }
-.loading-progress { width: 200px; height: 6px; background: #eee; border-radius: 3px; overflow: hidden; }
-.loading-progress-bar { height: 100%; background: #C0392B; border-radius: 3px; transition: width 0.3s; width: 0%; }
+/* 加载页面样式 */
+.loading-title { font-size: 18px; color: #333; font-weight: 600; margin-bottom: 8px; }
+.loading-status { font-size: 13px; color: #888; margin-bottom: 24px; }
+.loading-bar-wrap { display: flex; align-items: center; gap: 12px; width: 280px; }
+.loading-bar { flex: 1; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); }
+.loading-bar-fill { height: 100%; background: linear-gradient(90deg, #e74c3c 0%, #c0392b 100%); border-radius: 4px; transition: width 0.4s ease; width: 0%; position: relative; }
+.loading-bar-fill::after { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 20px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3)); }
+.loading-bar-text { font-size: 14px; color: #c0392b; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 42px; text-align: right; }
 .footer { text-align: center; font-size: 11px; color: #ccc; margin-top: 8px; }
 canvas { display: block; }
 @media (max-width: 900px) {
@@ -100,15 +106,18 @@ canvas { display: block; }
 </head>
 <body>
 
-<div id="loading-mask">
+<div id="loading-mask" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,0.97);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:20px;">
 <div id="debug-panel" style="position:fixed;bottom:10px;left:10px;background:#1a1a2e;color:#0f0;font-size:11px;padding:10px;border-radius:8px;max-width:400px;z-index:10000;display:none;font-family:monospace;line-height:1.6;">
   <b style="color:#ff0">🔍 API 原始数据：</b><br/>
   <span id="debug-data"></span>
 </div>
-  <div class="spinner"></div>
-  <div class="loading-text" id="loading-title">正在拉取收银系统数据…</div>
-  <div class="loading-sub" id="loading-status">连接收银系统 API</div>
-  <div class="loading-progress"><div class="loading-progress-bar" id="loading-progress-bar"></div></div>
+  <div class="spinner" style="margin:0 auto 10px;"></div>
+  <div class="loading-title" id="loading-title">正在拉取收银系统数据…</div>
+  <div class="loading-status" id="loading-status">连接收银系统 API</div>
+  <div class="loading-bar-wrap">
+    <div class="loading-bar"><div class="loading-bar-fill" id="loading-progress-bar"></div></div>
+    <div class="loading-bar-text" id="loading-percent">0%</div>
+  </div>
 </div>
 
 <div class="wrap">
@@ -154,6 +163,7 @@ canvas { display: block; }
       <select id="selYearB" style="display:none"></select>
       <span id="lblYearB" class="ctrl-label" style="display:none"></span>
       <select id="selMonthB" style="display:none"></select>
+      <span id="month-loading" class="ctrl-loading" style="display:none"></span>
     </div>
 
     <div id="ctrl-year" class="ctrl-group" style="display:none">
@@ -414,11 +424,12 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
 }
 
 // ══════════════════════════════════════════════════════════
-// 账单明细 API（getserialdata）
-// 支持按业务日期（settle_biz_date）聚合，可获取整月数据
+// 月度纯收汇总 API
+// 使用 getBusinessSituation（与日数据相同），逐日查询后汇总
+// 纯收字段：income.incomeTotal（与文档口径完全一致）
 // ══════════════════════════════════════════════════════════
 
-// 查询指定月份的账单明细并聚合
+// 查询指定月份所有门店的纯收汇总
 // 返回: { totalIncome, shops: { shopId: { name, income } } }
 async function queryMonthBillList(year, month, centerId, shopId) {
   const cacheKey = `bill_${centerId}_${shopId}_${year}_${month}`;
@@ -428,7 +439,6 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   
   const monthStr = `${year}-${p(month)}`;
   const dateType = 1;  // 营业日维度（与文档统计口径一致）
-  const pageSize = 500;  // 每页数量
   
   // 计算该月的天数
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -436,90 +446,28 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   let totalIncome = 0;
   const shops = {};  // { shopId: { name, income } }
   
-    // 逐日查询整个月的数据
+  // 逐日查询，用 getBusinessSituation API（与日数据相同）
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${year}-${p(month)}-${p(day)}`;
-    let pageNo = 1;
     
-    // 分页获取当天所有账单
-    while (true) {
-      // 调试：打印查询参数（仅day=1时）
-      if (day === 1 && pageNo === 1) {
-        console.log(`[账单API调试] 查询参数: centerId=${centerId}, shopId=${shopId}, settleDate=${dateStr}`);
-      }
-      // centerId=总部ID，shopId=门店ID
-      const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${dateStr}&dateType=${dateType}&pageNo=${pageNo}&pageSize=${pageSize}`;
+    try {
+      const result = await queryRevenue(dateStr, dateType, centerId, shopId);
+      const income = result.income || 0;
       
-      let json, lastError;
-      for (let retry = 0; retry < 2; retry++) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-        try {
-          const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getserialdata?${qs}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'access_token': token,
-              'accessid': API_CONFIG.accessId,
-              'granttype': 'client'
-            },
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-          json = await res.json();
-          break;
-        } catch (e) {
-          clearTimeout(timeoutId);
-          lastError = e;
-          if (e.name !== 'AbortError') throw e;
-          console.warn(`[账单API超时，重试] ${dateStr} 页${pageNo} (第${retry + 1}次)`);
-        }
+      totalIncome += income;
+      const sid = String(shopId);
+      if (!shops[sid]) {
+        shops[sid] = { name: result.shopName || `门店${sid}`, income: 0 };
       }
-      if (!json) {
-        console.warn(`[账单API跳过] ${dateStr} 页${pageNo}: ${lastError?.message || lastError}`);
-        break;
-      }
-      
-      const billList = json?.data?.billList || [];
-      const pageInfo = json?.data?.pageInfo || {};
-      
-      // 调试：分析第一条数据的字段（仅 day=1, pageNo=1 时）
-      if (day === 1 && pageNo === 1 && billList.length > 0) {
-        const b0 = billList[0];
-        // 分析可能的纯收字段
-        const candidateIncome = (parseFloat(b0.last_total)||0) - (parseFloat(b0.not_income_money)||0);
-        console.log(`[账单API调试] ${dateStr} 字段分析:`);
-        console.log(`  item_income_total=${b0.item_income_total} | last_total=${b0.last_total} | not_income_money=${b0.not_income_money}`);
-        console.log(`  候选纯收(last_total-not_income_money)=${candidateIncome}`);
-        console.log(`  total_records=${pageInfo.pageTotal || 1}页`);
-      }
-      
-      // 累加每条账单的纯收金额
-      // 纯收 = last_total（实收） - not_income_money（非收入）
-      for (const bill of billList) {
-        const lastTotal = parseFloat(bill.last_total) || 0;
-        const notIncome = parseFloat(bill.not_income_money) || 0;
-        const income = lastTotal - notIncome;
-        const sid = bill.shop_id || bill.shopId || bill.center_id || shopId;
-        const sname = bill.shop_name || bill.shopName || `门店${sid}`;
-        
-        totalIncome += income;
-        if (!shops[sid]) {
-          shops[sid] = { name: sname, income: 0 };
-        }
-        shops[sid].income += income;
-      }
-      
-      // 检查是否还有下一页
-      const totalPages = pageInfo.pageTotal || 1;
-      if (pageNo >= totalPages || billList.length === 0) break;
-      pageNo++;
+      shops[sid].income += income;
+    } catch (e) {
+      // 单天查询失败不影响整月，继续
     }
   }
   
   const result = { totalIncome, shops, monthStr };
   SHOP_DATA_CACHE[cacheKey] = result;
-  console.log(`[账单API] ${monthStr} 汇总: 总纯收=${totalIncome.toFixed(2)}, 门店数=${Object.keys(shops).length}, 查询天数=${daysInMonth}`);
+  console.log(`[月度汇总] ${monthStr} 门店${shopId}: 总纯收=${totalIncome.toFixed(2)}`);
   return result;
 }
 
@@ -542,8 +490,10 @@ async function batchQuery(tasks, concurrency=10, onProgress) {
 function updateProgress(percent, text) {
   const bar = document.getElementById('loading-progress-bar');
   const status = document.getElementById('loading-status');
+  const percentEl = document.getElementById('loading-percent');
   if (bar) bar.style.width = percent + '%';
   if (status) status.textContent = text;
+  if (percentEl) percentEl.textContent = percent + '%';
 }
 
 // ═══════════════════════════════════════════════════════
@@ -635,7 +585,7 @@ function lsSaveMeta() {
 // ══════════════════════════════════════════════════════════
 // 清理旧缓存（2026-04-08：API从getBusinessSituation改为getserialdata，旧缓存数据不兼容）
 // ══════════════════════════════════════════════════════════
-const LS_CACHE_VERSION = 'v2';  // 缓存版本号，升级时修改
+const LS_CACHE_VERSION = 'v4';  // v3→v4：强制清除旧缓存，确保使用新的getBusinessSituation API重新加载所有月份数据
 
 function lsClearOldCache() {
   // 检查是否需要清理旧缓存
@@ -831,35 +781,25 @@ async function loadAllData() {
   console.log('[门店月数据] 大蜀山:', shopMonthlyData[247421]);
 
   // ══════════════════════════════════════════════════════════
-  // 第三阶段：预加载上月和上上月（保证初始环比视图直接可用）
-  // 当前4月时，初始默认显示"3月 环比 2月"，两个月都需要预加载
+  // 第三阶段：静默预加载近 6 个月（保证常见环比对比秒开，无需等待）
   // ══════════════════════════════════════════════════════════
-  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prevYear = prevMonthDate.getFullYear();
-  const prevMonth = prevMonthDate.getMonth() + 1;
-  const prevMonthKey = `${prevYear}-${p(prevMonth)}`;
-
-  // 上上月（环比对比月）
-  const prev2MonthDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-  const prev2Year = prev2MonthDate.getFullYear();
-  const prev2Month = prev2MonthDate.getMonth() + 1;
-  const prev2MonthKey = `${prev2Year}-${p(prev2Month)}`;
-
-  // 需要预加载的月份列表（去除已加载的）
-  const preloadList = [];
-  for (const [py, pm, pk] of [[prevYear, prevMonth, prevMonthKey], [prev2Year, prev2Month, prev2MonthKey]]) {
+  const preloadTargets = [];
+  for (let i = 1; i <= 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const py = d.getFullYear(), pm = d.getMonth() + 1;
+    const pk = `${py}-${p(pm)}`;
     const isOnline = py > API_CONFIG.onlineYear || (py === API_CONFIG.onlineYear && pm >= API_CONFIG.onlineMonth);
-    if (isOnline && !loadedMonths.has(pk)) preloadList.push([py, pm, pk]);
+    if (isOnline && !loadedMonths.has(pk)) preloadTargets.push([py, pm, pk]);
   }
 
-  for (const [py, pm, pk] of preloadList) {
-    updateProgress(99, `预加载 ${pk}…`);
+  // 批量并发预加载（所有月份并行，加速初始化）
+  const preloadPromises = preloadTargets.map(async ([py, pm, pk]) => {
     try {
-      const prevTasks = shopIds.map(sid => () => queryMonthBillList(py, pm, API_CONFIG.centerId, sid));
-      const prevResults = await batchQuery(prevTasks, 5, () => {});
+      const tasks = shopIds.map(sid => () => queryMonthBillList(py, pm, API_CONFIG.centerId, sid));
+      const results = await batchQuery(tasks, 8);  // 并发提高到8，加快预加载
       const prevYKey = String(py);
-      const prevShopTmp = {};
-      prevResults.forEach(result => {
+      const shopTmp = {};
+      results.forEach(result => {
         if (result?.shops) {
           Object.entries(result.shops).forEach(([sid, shopData]) => {
             const n = Number(sid);
@@ -870,22 +810,27 @@ async function loadAllData() {
               if (!shopYearlyData[n]) shopYearlyData[n] = {};
               shopMonthlyData[n][pk] = (shopMonthlyData[n][pk] || 0) + shopData.income;
               shopYearlyData[n][prevYKey] = (shopYearlyData[n][prevYKey] || 0) + shopData.income;
-              prevShopTmp[n] = (prevShopTmp[n] || 0) + shopData.income;
+              shopTmp[n] = (shopTmp[n] || 0) + shopData.income;
             }
           });
         }
       });
-      console.log(`[预加载] ${pk}: 总纯收=${(monthlyData[pk] || 0).toFixed(2)}, 参与门店=${Object.keys(prevShopTmp).length}`);
-      if (Object.keys(prevShopTmp).length > 0) {
-        lsSaveMonth(pk, monthlyData[pk], prevShopTmp);
+      if (Object.keys(shopTmp).length > 0) {
+        lsSaveMonth(pk, monthlyData[pk], shopTmp);
         loadedMonths.add(pk);
         lsSaveMeta();
-        console.log(`[预加载完成] ${pk}:`, monthlyData[pk]);
       }
+      console.log(`[预加载 ${pk}] 完成: ${Object.keys(shopTmp).length} 门店`);
     } catch (e) {
-      console.warn(`[预加载失败] ${pk}`, e);
+      console.warn(`[预加载失败] ${pk}`, e.message);
     }
-  }
+  });
+
+  // 后台静默等待预加载完成（不阻塞UI，页面初始化后可立即交互）
+  Promise.all(preloadPromises).then(() => {
+    lsSaveMeta();
+    console.log('[预加载] 全部完成');
+  });
 
   updateProgress(100, '完成');
   return {
@@ -950,7 +895,13 @@ async function ensureMonthData(year, month) {
     return;
   }
   loadingMonths.add(key);
-  console.log(`[加载历史月份] ${key}... 使用账单明细API获取整月数据`);
+  const monthName = `${year}年${MONTH_NAMES[month - 1]}`;
+  const loadingEl = document.getElementById('month-loading');
+  if (loadingEl) {
+    loadingEl.style.display = '';
+    loadingEl.textContent = `↻ 加载 ${monthName}…`;
+  }
+  console.log(`[加载历史月份] ${key}...`);
   try {
     const shopIds = ALL_SHOPS.map(s => s.centerId);
     const settleDate = `${year}-${p(month)}-01`;
@@ -1009,6 +960,11 @@ async function ensureMonthData(year, month) {
     console.error(`[加载失败] ${key}:`, e);
   } finally {
     loadingMonths.delete(key);
+    const loadingEl = document.getElementById('month-loading');
+    if (loadingEl && loadingMonths.size === 0) {
+      loadingEl.style.display = 'none';
+      loadingEl.textContent = '';
+    }
   }
 }
 
@@ -1071,7 +1027,7 @@ function initSelectors() {
 
   // 辅助：找某年某月往前最近的有数据月份（含边界保护）
   function findPrevAvailableMonth(year, month) {
-    const minYear = Math.min(...availableYears);
+    const minYear = availableYears.length > 0 ? Math.min(...availableYears) : API_CONFIG.onlineYear;
     let y = year, m = month;
     while (m > 0) {
       if (availableMonths.includes(`${y}-${p(m)}`)) return { year: y, month: m };
@@ -1291,8 +1247,21 @@ function renderSummary() {
     }
     // 同比（yoy）：去年数据 API 不可靠，跳过自动加载，显示 — 即可
   } else if (STATE.dim === 'year') {
-    ensureMonthData(STATE.yearOnly, 1);
-    ensureMonthData(STATE.yearPrev, 1);
+    // 年报：需要加载选中年份的全部有效月份（不能只加载1月）
+    const curYearNow = DATA?.curYear || new Date().getFullYear();
+    const curMonthNow = DATA?.curMonth || (new Date().getMonth() + 1);
+    // yearOnly 的有效月份范围
+    const yOnlyMaxMonth = (STATE.yearOnly === curYearNow) ? curMonthNow : 12;
+    const yOnlyMinMonth = (STATE.yearOnly === API_CONFIG.onlineYear) ? API_CONFIG.onlineMonth : 1;
+    for (let m = yOnlyMinMonth; m <= yOnlyMaxMonth; m++) {
+      ensureMonthData(STATE.yearOnly, m);
+    }
+    // yearPrev 的有效月份范围（通常是上一年）
+    const yPrevMaxMonth = (STATE.yearPrev === curYearNow) ? curMonthNow : 12;
+    const yPrevMinMonth = (STATE.yearPrev === API_CONFIG.onlineYear) ? API_CONFIG.onlineMonth : 1;
+    for (let m = yPrevMinMonth; m <= yPrevMaxMonth; m++) {
+      ensureMonthData(STATE.yearPrev, m);
+    }
   }
 
   const revA = getSummaryRevenue(true, shopCenterId);
@@ -1741,6 +1710,81 @@ function exportData() {
 // ═══════════════════════════════════════════════════════
 // 启动
 // ═══════════════════════════════════════════════════════
+
+// 诊断工具：对比朝阳门店2月1日API数据与文档数据
+// 文档正确值：纯收=56714.13，营业收入=59460.00，非收入=2745.87
+window.debugCompare = async function(date = '2026-02-01', shopId = '247413') {
+  const token = localStorage.getItem('wdtoken') || '';
+  const baseUrl = 'https://boss.huiShang56.com';
+  const dateType = 1;
+  const pageSize = 500;
+  let pageNo = 1;
+  let allBills = [];
+  
+  while (true) {
+    const qs = `centerId=247412&shopId=${shopId}&settleDate=${date}&dateType=${dateType}&pageNo=${pageNo}&pageSize=${pageSize}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    try {
+      const res = await fetch(`${baseUrl}/datatransfer/getserialdata?${qs}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': 'huiShang', 'granttype': 'client' }
+      });
+      clearTimeout(timeoutId);
+      const json = await res.json();
+      const bills = json?.data?.billList || [];
+      if (bills.length === 0) break;
+      allBills = allBills.concat(bills);
+      const totalPages = json?.data?.pageInfo?.pageTotal || 1;
+      if (pageNo >= totalPages) break;
+      pageNo++;
+    } catch (e) {
+      clearTimeout(timeoutId);
+      console.error('API错误:', e);
+      break;
+    }
+  }
+  
+  // 计算汇总
+  let sumLastTotal = 0, sumNotIncome = 0, sumItemIncome = 0;
+  let billCount = 0, itemCount = 0;
+  const paymentBreakdown = {};
+  
+  for (const b of allBills) {
+    const lt = parseFloat(b.last_total) || 0;
+    const ni = parseFloat(b.not_income_money) || 0;
+    const ii = parseFloat(b.item_income_total) || 0;
+    const payType = b.pay_type || b.payWay || '未知';
+    sumLastTotal += lt;
+    sumNotIncome += ni;
+    sumItemIncome += ii;
+    billCount++;
+    itemCount += 1;
+    if (!paymentBreakdown[payType]) paymentBreakdown[payType] = 0;
+    paymentBreakdown[payType] += lt - ni;
+  }
+  
+  const apiPure = sumLastTotal - sumNotIncome;
+  const docPure = 56714.13; // 文档正确值
+  
+  console.log(`\n========== 诊断对比: ${date} 朝阳门店 ==========`);
+  console.log(`API账单数: ${billCount}, 明细行数: ${itemCount}`);
+  console.log(`sum(last_total):        ${sumLastTotal.toFixed(2)}`);
+  console.log(`sum(not_income_money):  ${sumNotIncome.toFixed(2)}`);
+  console.log(`API纯收(lt-ni):         ${apiPure.toFixed(2)}`);
+  console.log(`API sum(item_income):   ${sumItemIncome.toFixed(2)}`);
+  console.log(`文档纯收:              ${docPure.toFixed(2)}`);
+  console.log(`差异(文档-API):         ${(docPure - apiPure).toFixed(2)}`);
+  console.log(`\n支付方式分解:`, paymentBreakdown);
+  
+  // 打印前3条明细
+  console.log(`\n前3条明细:`);
+  allBills.slice(0, 3).forEach((b, i) => {
+    console.log(`  [${i+1}] last_total=${b.last_total} | not_income=${b.not_income_money} | item_income=${b.item_income_total} | pay=${b.pay_type || b.payWay}`);
+  });
+  
+  return { sumLastTotal, sumNotIncome, apiPure, docPure, diff: docPure - apiPure };
+};
 
 window.addEventListener('DOMContentLoaded', async () => {
   try {
