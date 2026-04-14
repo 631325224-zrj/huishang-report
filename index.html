@@ -897,9 +897,16 @@ async function ensureMonthData(year, month) {
   if (loadedMonths.has(key)) {
     return;
   }
-  // 正在加载中，跳过（避免并发重复加载）
+  // 正在加载中，等待其完成（返回一个等待 loadedMonths 的 Promise，避免 Promise.all 提前 resolve）
   if (loadingMonths.has(key)) {
-    return;
+    return new Promise(resolve => {
+      const check = setInterval(() => {
+        if (loadedMonths.has(key) || !loadingMonths.has(key)) {
+          clearInterval(check);
+          resolve();
+        }
+      }, 200);
+    });
   }
   loadingMonths.add(key);
   const monthName = `${year}年${MONTH_NAMES[month - 1]}`;
@@ -961,7 +968,10 @@ async function ensureMonthData(year, month) {
     lsSaveMeta();
     console.log(`[加载完成] ${key}:`, DATA.monthlyData[key], '(已写入本地缓存)');
     loadedMonths.add(key); // ✅ 标记为已完整加载
-    render();
+    // 只在没有其他月份正在加载时才触发 render（批量加载时等所有完成后统一渲染，避免频繁重绘）
+    if (loadingMonths.size === 0) {
+      render();
+    }
   } catch (e) {
     console.error(`[加载失败] ${key}:`, e);
   } finally {
