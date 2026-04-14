@@ -969,7 +969,8 @@ async function ensureMonthData(year, month) {
     console.log(`[加载完成] ${key}:`, DATA.monthlyData[key], '(已写入本地缓存)');
     loadedMonths.add(key); // ✅ 标记为已完整加载
     // 只在没有其他月份正在加载时才触发 render（批量加载时等所有完成后统一渲染，避免频繁重绘）
-    if (loadingMonths.size === 0) {
+    // 年报批量加载中由 ensureYearData 的 Promise.all 统一触发，此处跳过
+    if (loadingMonths.size === 0 && !_yearBatchLoading) {
       render();
     }
   } catch (e) {
@@ -1248,6 +1249,7 @@ function updateBSelector() {
 // 返回 true 表示"正在异步加载，renderSummary 应跳过渲染等待回调"
 // 返回 false 表示"数据已全部就绪，可以直接渲染"
 let _yearLoadingPromise = null; // 防止重复触发
+let _yearBatchLoading = false;  // 年报批量加载中，禁止 ensureMonthData 触发 render
 function ensureYearData(onReady) {
   const curYearNow = DATA?.curYear || new Date().getFullYear();
   const curMonthNow = DATA?.curMonth || (new Date().getMonth() + 1);
@@ -1285,7 +1287,9 @@ function ensureYearData(onReady) {
     loadingEl.textContent = `↻ 加载年报数据（${promises.length} 个月）…`;
   }
 
+  _yearBatchLoading = true; // 禁止 ensureMonthData 单独触发 render
   Promise.all(promises).then(() => {
+    _yearBatchLoading = false;
     if (loadingEl) loadingEl.style.display = 'none';
     onReady(); // 加载完毕后触发完整渲染
   });
