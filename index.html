@@ -634,51 +634,130 @@ async function batchQuery(tasks, concurrency=10, onProgress) {
 }
 
 // ══════════════════════════════════════════════════════════
-// 出租率模块：预订数据查询
-// API: datatransfer/getReserveList  （收银系统预订查询接口）
-// 午市 mealType=1，晚市 mealType=2
-// 只统计客位类型为"包间"的预订
+// 出租率模块：包间数 + 预订单查询
+// 包间数：getServiceArea，typeName 含"包"且 delflg=0
+// 预订单：getserialdata，orderType=2，point_type_name 含"包"
+// 午市/晚市判断：按开台时间（order_time）
+//   一般门店：9:00~16:00 午市，16:00 后晚市
+//   宁波店：8:00~15:30 午市，15:30 后晚市
+//   小馆：9:00~15:00 午市，15:00 后晚市
+//   仙人洞：9:00~14:30 午市，14:30 后晚市
 // ══════════════════════════════════════════════════════════
-const OCCUPY_CACHE = {}; // 出租率数据缓存
+const OCCUPY_CACHE = {}; // 出租率缓存
 
-// 查询单门店指定日期预订数据，返回 { noon: N, evening: N }（包间预订数量）
-async function queryReserve(settleDate, centerId, shopId, dateType = 1) {
+// 午市/晚市判断阈值（小时*60+分钟）
+const NOON_RANGES = {
+  default: [9 * 60, 16 * 60],       // [540, 960]
+  '宁波':   [8 * 60, 15.5 * 60],     // [480, 930]
+  '小馆':   [9 * 60, 15 * 60],       // [540, 900]
+  '仙人洞': [9 * 60, 14.5 * 60],     // [540, 870]
+};
+
+function isNoon(shopName, orderTime) {
+  const h = orderTime ? orderTime.match(/T?(\d{2}):(\d{2})/) : null;
+  if (!h) return false;
+  const mins = parseInt(h[1]) * 60 + parseInt(h[2]);
+  const range = NOON_RANGES[shopName] || NOON_RANGES.default;
+  return mins >= range[0] && mins <= range[1];
+}
+
+// 查询单门店包间数（getServiceArea，typeName 含"包"，delflg=0）
+async function queryShopRooms(shopId) {
+  const cacheKey = `rooms_${shopId}`;
+  if (OCCUPY_CACHE[cacheKey] !== undefined) return OCCUPY_CACHE[cacheKey];
+
+  let rooms = 0;
+  try {
+    const qs = `centerId=${API_CONFIG.centerId}&shopId=${shopId}&pageNo=1&pageSize=500`;
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 12000);
+    const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getServiceArea?${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
+      signal: controller.signal,
+    });
+    clearTimeout(tid);
+    const json = await res.json();
+    const list = json?.data?.areaList || [];
+    rooms = list.filter(a => {
+      const typeName = a.typeName || '';
+      const isRoom = typeName.includes('包') || typeName.includes('包间');
+      const isActive = a.delflg === 0 || a.delflg === '0' || a.isEnable === true;
+      return isRoom && isActive;
+    }).length;
+  } catch (e) {
+    // fallback：尝试 pointList 字段
+    try {
+      const qs = `centerId=${API_CONFIG.centerId}&shopId=${shopId}&pageNo=1&pageSize=500`;
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 12000);
+      const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getServiceArea?${qs}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
+        signal: controller.signal,
+      });
+      clearTimeout(tid);
+      const json = await res.json();
+      // 有些接口返回 pointList
+      const list = json?.data?.pointList || [];
+      rooms = list.filter(a => {
+        const typeName = a.typeName || '';
+        return (typeName.includes('包') || typeName.includes('包间')) && (a.delflg === 0 || a.delflg === '0' || a.isEnable === true);
+      }).length;
+    } catch (_) {}
+  }
+
+  OCCUPY_CACHE[cacheKey] = rooms;
+  return rooms;
+}
+
+// 查询单门店指定日期预订单（getserialdata），返回 { noon: N, evening: N }
+async function queryReserve(settleDate, shopId, dateType = 1) {
   const cacheKey = `rsv_${shopId}_${settleDate}_${dateType}`;
   if (OCCUPY_CACHE[cacheKey] !== undefined) return OCCUPY_CACHE[cacheKey];
 
+  const shopInfo = ALL_SHOPS.find(s => String(s.centerId) === String(shopId));
+  const shopName = shopInfo?.name || '';
+
   let noon = 0, evening = 0;
+  let pageNo = 1;
+  const pageSize = 500;
+  let totalPages = 1;
+
   try {
-    // 尝试调用预订查询接口（分午晚市两次，或一次性获取后筛选）
-    const results = await Promise.all([1, 2].map(async mealType => {
-      const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${settleDate}&dateType=${dateType}&mealType=${mealType}&pageNo=1&pageSize=500`;
+    while (pageNo <= totalPages) {
+      const qs = `centerId=${API_CONFIG.centerId}&shopId=${shopId}&settleDate=${settleDate}&dateType=${dateType}&pageNo=${pageNo}&pageSize=${pageSize}&orderType=2`;
       const controller = new AbortController();
       const tid = setTimeout(() => controller.abort(), 12000);
       try {
-        const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getReserveList?${qs}`, {
+        const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getserialdata?${qs}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
           signal: controller.signal,
         });
         clearTimeout(tid);
         const json = await res.json();
-        // 统计客位类型为"包间"的预订数（已到店 + 预约中，不含取消）
-        const list = json?.data?.list || json?.data?.reserveList || [];
-        return list.filter(r => {
-          const seatType = (r.seatTypeName || r.seat_type_name || r.clientType || '').toLowerCase();
-          const status = String(r.status || r.reserveStatus || '');
-          // 包间：客位类型名包含"包" 或 seatType=room/vip/private
-          const isRoom = seatType.includes('包') || seatType.includes('vip') || seatType === 'room';
-          // 排除已取消的预订
-          const isCancelled = status === '3' || status === 'cancel' || seatType.includes('取消');
-          return isRoom && !isCancelled;
-        }).length;
+        const bills = json?.data?.billList || [];
+        if (bills.length === 0) break;
+        totalPages = json?.data?.pageInfo?.pageTotal || 1;
+
+        bills.forEach(b => {
+          const pointType = (b.point_type_name || '').toLowerCase();
+          if (!pointType.includes('包')) return;
+          const orderTime = b.order_time || b.create_time || b.settle_time || '';
+          if (isNoon(shopName, orderTime)) {
+            noon++;
+          } else {
+            evening++;
+          }
+        });
+
+        pageNo++;
       } catch (e) {
         clearTimeout(tid);
-        return 0;
+        break;
       }
-    }));
-    noon = results[0];
-    evening = results[1];
+    }
   } catch (e) {
     console.warn(`[预订查询失败] ${settleDate} 门店${shopId}`, e.message);
   }
@@ -689,22 +768,75 @@ async function queryReserve(settleDate, centerId, shopId, dateType = 1) {
 }
 
 // 查询指定日期所有门店出租率（dateType=1日/2月/3年）
-// 返回: { shops: { centerId: { noon, evening, rooms } } }
 async function queryOccupancyAll(settleDate, dateType = 1) {
-  const shopIds = ALL_SHOPS.filter(s => (SHOP_ROOMS[s.centerId] || 0) > 0);
-  const results = await batchQuery(
-    shopIds.map(s => () => queryReserve(settleDate, API_CONFIG.centerId, s.centerId, dateType)),
-    8
-  );
-  const shops = {};
-  shopIds.forEach((s, i) => {
-    shops[s.centerId] = {
-      noon: results[i]?.noon || 0,
-      evening: results[i]?.evening || 0,
-      rooms: SHOP_ROOMS[s.centerId] || 0,
-    };
-  });
-  return { shops };
+  // 第一步：并发查所有门店包间数
+  const shopIds = ALL_SHOPS.map(s => s.centerId);
+  const roomTasks = shopIds.map(sid => () => queryShopRooms(sid));
+  const roomResults = await batchQuery(roomTasks, 10);
+
+  // 第二步：并发查所有门店预订单（按月份/年份时跳过，逐日统计）
+  let reserveResults;
+  if (dateType === 2) {
+    // 月维度：拆成每天查，再汇总到月
+    const [year, month] = settleDate.split('-');
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const dayTasks = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dayDate = `${year}-${p(month)}-${p(d)}`;
+      shopIds.forEach(sid => {
+        dayTasks.push(() => queryReserve(dayDate, sid, 1));
+      });
+    }
+    const dayResults = await batchQuery(dayTasks, 15);
+    // 汇总到门店级别（dayResults 每组 daysInMonth 条）
+    const shops = {};
+    shopIds.forEach((sid, si) => {
+      let noonTotal = 0, eveningTotal = 0;
+      for (let d = 0; d < daysInMonth; d++) {
+        const r = dayResults[d * shopIds.length + si] || { noon: 0, evening: 0 };
+        noonTotal += r.noon || 0;
+        eveningTotal += r.evening || 0;
+      }
+      shops[sid] = { noon: noonTotal, evening: eveningTotal, rooms: roomResults[si] || 0 };
+    });
+    reserveResults = { shops };
+  } else if (dateType === 3) {
+    // 年维度：拆成每天查，再汇总
+    const year = settleDate;
+    const dayTasks = [];
+    for (let m = 1; m <= 12; m++) {
+      const daysInMonth = new Date(year, m, 0).getDate();
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dayDate = `${year}-${p(m)}-${p(d)}`;
+        shopIds.forEach(sid => {
+          dayTasks.push(() => queryReserve(dayDate, sid, 1));
+        });
+      }
+    }
+    const dayResults = await batchQuery(dayTasks, 15);
+    const shops = {};
+    shopIds.forEach((sid, si) => {
+      let noonTotal = 0, eveningTotal = 0;
+      for (let i = si; i < dayResults.length; i += shopIds.length) {
+        const r = dayResults[i] || { noon: 0, evening: 0 };
+        noonTotal += r.noon || 0;
+        eveningTotal += r.evening || 0;
+      }
+      shops[sid] = { noon: noonTotal, evening: eveningTotal, rooms: roomResults[si] || 0 };
+    });
+    reserveResults = { shops };
+  } else {
+    // 日维度：直接查
+    const tasks = shopIds.map(sid => () => queryReserve(settleDate, sid, 1));
+    const rResults = await batchQuery(tasks, 10);
+    const shops = {};
+    shopIds.forEach((sid, i) => {
+      shops[sid] = { ...(rResults[i] || { noon: 0, evening: 0 }), rooms: roomResults[i] || 0 };
+    });
+    reserveResults = { shops };
+  }
+
+  return reserveResults;
 }
 
 function updateProgress(percent, text) {
@@ -1508,7 +1640,7 @@ async function renderOccupancy() {
     settleDate = `${STATE.occYearA}-${p(STATE.occMonthA)}-01`;
     dateType = 2;
   } else if (STATE.occDim === 'year') {
-    settleDate = `${STATE.occYearA}-01-01`;
+    settleDate = `${STATE.occYearA}`;  // 直接传年份字符串
     dateType = 3;
   }
 
@@ -1527,9 +1659,10 @@ async function renderOccupancy() {
 function renderOccupancyTable(result, settleDate) {
   const shops = result.shops;
 
-  // 过滤：只显示有包间的门店
+  // 过滤：只显示有包间的门店（rooms 从 API 返回的包间数判断）
   let filteredShops = ALL_SHOPS.filter(s => {
-    const rooms = SHOP_ROOMS[s.centerId] || 0;
+    const d = shops[s.centerId];
+    const rooms = d?.rooms || 0;
     if (rooms === 0) return false;
     if (STATE.region && s.region !== STATE.region) return false;
     if (STATE.shop && s.name !== STATE.shop) return false;
@@ -1539,7 +1672,7 @@ function renderOccupancyTable(result, settleDate) {
   // 汇总全局
   let totalRooms = 0, totalNoon = 0, totalEvening = 0;
   filteredShops.forEach(s => {
-    const d = shops[s.centerId] || { noon: 0, evening: 0, rooms: SHOP_ROOMS[s.centerId] || 0 };
+    const d = shops[s.centerId] || { noon: 0, evening: 0, rooms: 0 };
     totalRooms    += d.rooms;
     totalNoon     += d.noon;
     totalEvening  += d.evening;
@@ -1604,7 +1737,7 @@ function renderOccupancyTable(result, settleDate) {
     tbody.appendChild(hdr);
 
     regionShops.forEach(s => {
-      const d = shops[s.centerId] || { noon: 0, evening: 0, rooms: SHOP_ROOMS[s.centerId] || 0 };
+      const d = shops[s.centerId] || { noon: 0, evening: 0, rooms: 0 };
       const rooms = d.rooms;
       const nPct  = rooms > 0 ? d.noon / rooms * 100 : 0;
       const ePct  = rooms > 0 ? d.evening / rooms * 100 : 0;
@@ -1672,8 +1805,11 @@ function exportOccupancy() {
   csv += `徽商故里出租率报表 - ${dimLabel}\n`;
   csv += `区域,门店,包间数,午市预订,午市出租率,晚市预订,晚市出租率,合计预订,全天出租率\n`;
 
-  ALL_SHOPS.filter(s => (SHOP_ROOMS[s.centerId] || 0) > 0).forEach(s => {
-    const d = shops[s.centerId] || { noon: 0, evening: 0, rooms: SHOP_ROOMS[s.centerId] || 0 };
+  ALL_SHOPS.filter(s => {
+    const d = shops[s.centerId];
+    return (d?.rooms || 0) > 0;
+  }).forEach(s => {
+    const d = shops[s.centerId] || { noon: 0, evening: 0, rooms: 0 };
     const rooms = d.rooms;
     const nPct  = rooms > 0 ? (d.noon / rooms * 100).toFixed(1) + '%' : '0%';
     const ePct  = rooms > 0 ? (d.evening / rooms * 100).toFixed(1) + '%' : '0%';
