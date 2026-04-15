@@ -1282,7 +1282,7 @@ function updateBSelector() {
 // 返回 false 表示"数据已全部就绪，可以直接渲染"
 let _yearLoadingPromise = null; // 防止重复触发
 let _yearBatchLoading = false;  // 年报批量加载中，禁止 ensureMonthData 触发 render
-function ensureYearData(onReady) {
+function ensureYearData(dimSnapshot, onReady) {
   const curYearNow = DATA?.curYear || new Date().getFullYear();
   const curMonthNow = DATA?.curMonth || (new Date().getMonth() + 1);
   const yOnlyMaxMonth = (STATE.yearOnly === curYearNow) ? curMonthNow : 12;
@@ -1323,7 +1323,12 @@ function ensureYearData(onReady) {
   Promise.all(promises).then(() => {
     _yearBatchLoading = false;
     if (loadingEl) loadingEl.style.display = 'none';
-    onReady(); // 加载完毕后触发完整渲染
+    // 用捕获的 dimSnapshot 判断是否仍在年报模式，防止加载期间用户切走后误渲染年报
+    if (STATE.dim === dimSnapshot) {
+      onReady(); // 加载完毕后触发完整渲染
+    } else {
+      console.log('[ensureYearData] 加载完成，但 STATE.dim 已切换为', STATE.dim, '，跳过年报回调');
+    }
   });
   return true; // 正在异步加载
 }
@@ -1515,11 +1520,6 @@ function renderTable(shops, dim) {
   // resetSort() / sortTable() 会触发 render()，此时 STATE 可能仍是 year，dim 却是 day
   const currentThA = document.getElementById('th-a')?.textContent || '';
   const isYearMode = dim === 'year';
-  const domHasYearHeader = currentThA.endsWith('年');
-  if (domHasYearHeader && !isYearMode) {
-    // 年报已渲染过一次，禁止被旧状态覆盖；用日志记录被跳过的调用
-    console.log('[renderTable BLOCKED] 年报表头被保护，禁止覆盖为', currentThA, '→', dim);
-  }
 
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
@@ -1703,7 +1703,7 @@ async function render() {
 
   // 年报维度：如果数据尚未全部加载，先触发加载，等待完成后重新 render
   if (dim === 'year') {
-    const stillLoading = ensureYearData(() => render());
+    const stillLoading = ensureYearData(dim, () => render());
     if (stillLoading) return; // 数据未就绪，等加载完毕后 render() 会被自动调用
   }
 
