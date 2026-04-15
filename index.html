@@ -251,6 +251,7 @@ canvas { display: block; }
         <span class="meta" id="occ-table-meta"></span>
         <div class="actions">
           <button class="btn btn-export" onclick="exportOccupancy()">📥 导出</button>
+          <button class="btn btn-export" style="background:#8e44ad" onclick="debugOccupancy()">🔧 调试</button>
         </div>
       </div>
       <div class="table-scroll">
@@ -1735,6 +1736,59 @@ function exportOccupancy() {
   a.href = url; a.download = `徽商故里_出租率_${dimLabel}.csv`; a.click();
   URL.revokeObjectURL(url);
 }
+
+// ════════ 调试函数 ════════
+window.debugOccupancy = async function() {
+  try {
+    const token = localStorage.getItem('wdtoken') || '';
+    const shopId = '159'; // 广安店测试
+
+    // 测试1: getServiceArea
+    let msg = '=== getServiceArea ===\n';
+    const r1 = await fetch(`https://boss.huiShang56.com/datatransfer/getServiceArea?centerId=247412&shopId=${shopId}&pageNo=1&pageSize=50`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': 'huiShang', 'granttype': 'client' }
+    });
+    const j1 = await r1.json();
+    const keys1 = Object.keys(j1.data || {});
+    const list1 = j1.data?.areaList || j1.data?.pointList || [];
+    msg += 'data keys: ' + keys1.join(', ') + '\n';
+    msg += 'list count: ' + list1.length + '\n';
+    if (list1.length > 0) {
+      msg += 'list[0] keys: ' + Object.keys(list1[0]).join(', ') + '\n';
+      msg += 'list[0]: ' + JSON.stringify(list1[0]) + '\n';
+    }
+    const rooms = list1.filter(a => (a.typeName || '').includes('包'));
+    msg += '\n包间数(typeName含包): ' + rooms.length;
+    if (rooms.length > 0) msg += '\n包间示例: ' + JSON.stringify(rooms[0]);
+
+    // 测试2: getBookOrderDetailData
+    msg += '\n\n=== getBookOrderDetailData ===\n';
+    const today = '2026-04-15';
+    const r2 = await fetch(`https://boss.huiShang56.com/datatransfer/getBookOrderDetailData?centerId=247412&shopId=${shopId}&orderTimeType=1&begin=${today}%2006:30:00&end=${today}%2023:59:59`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': 'huiShang', 'granttype': 'client' }
+    });
+    const j2 = await r2.json();
+    const orders = j2.data?.data || [];
+    msg += '订单数: ' + orders.length + '\n';
+    if (orders.length > 0) {
+      msg += 'orders[0] keys: ' + Object.keys(orders[0]).join(', ') + '\n';
+      msg += 'orders[0]: ' + JSON.stringify(orders[0]) + '\n';
+      const noonOrders = orders.filter(o => o.shift === '午市');
+      const eveOrders = orders.filter(o => o.shift === '晚市');
+      msg += '\n午市订单: ' + noonOrders.length;
+      msg += '\n晚市订单: ' + eveOrders.length;
+    }
+
+    alert(msg);
+    console.log('[调试 getServiceArea]', j1);
+    console.log('[调试 getBookOrderDetailData]', j2);
+  } catch (e) {
+    alert('调试失败: ' + e.message);
+    console.error('[调试错误]', e);
+  }
+};
 
 // ════════ 月份选项动态过滤（全局，根据年份只显示有数据的月份）════════
 function updateMonthOpts(year, selId) {
