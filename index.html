@@ -251,7 +251,6 @@ canvas { display: block; }
         <span class="meta" id="occ-table-meta"></span>
         <div class="actions">
           <button class="btn btn-export" onclick="exportOccupancy()">📥 导出</button>
-          <button class="btn btn-export" onclick="debugGetServiceArea()" style="background:#e67e22">🔧 调试包间</button>
         </div>
       </div>
       <div class="table-scroll">
@@ -635,66 +634,19 @@ async function batchQuery(tasks, concurrency=10, onProgress) {
 }
 
 // ══════════════════════════════════════════════════════════
-// 出租率模块：包间数 + 预订单查询
-// 包间数：getServiceArea，typeName 含"包"且 delflg=0
-// 预订单：getserialdata，orderType=2，point_type_name 含"包"
-// 午市/晚市判断：按开台时间（order_time）
-//   一般门店：9:00~16:00 午市，16:00 后晚市
-//   宁波店：8:00~15:30 午市，15:30 后晚市
-//   小馆：9:00~15:00 午市，15:00 后晚市
-//   仙人洞：9:00~14:30 午市，14:30 后晚市
+// 出租率模块：包间数 + 预订查询
+// 预订接口：getBookOrderDetailData（shift 午市/晚市，bookState 预订状态）
+// 包间数接口：getServiceArea（typeName 含"包"，delflg=0）
 // ══════════════════════════════════════════════════════════
 const OCCUPY_CACHE = {}; // 出租率缓存
 
-// ═══ 临时调试函数 ═══
-window.debugGetServiceArea = async function() {
-  const token = localStorage.getItem('wdtoken') || '';
-  const shopId = '159'; // 先用广安店测试
-  const res = await fetch(`https://boss.huiShang56.com/datatransfer/getServiceArea?centerId=247412&shopId=${shopId}&pageNo=1&pageSize=50`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': 'huiShang', 'granttype': 'client' }
-  });
-  const json = await res.json();
-  const keys = Object.keys(json.data || {});
-  const areaList = json.data?.areaList || [];
-  const pointList = json.data?.pointList || [];
-  let msg = `data keys: ${keys.join(', ')}\n`;
-  msg += `areaList count: ${areaList.length}\n`;
-  msg += `pointList count: ${pointList.length}\n`;
-  if (areaList.length > 0) msg += `areaList[0] keys: ${Object.keys(areaList[0]).join(', ')}\nareaList[0]: ${JSON.stringify(areaList[0])}\n`;
-  if (pointList.length > 0) msg += `pointList[0] keys: ${Object.keys(pointList[0]).join(', ')}\npointList[0]: ${JSON.stringify(pointList[0])}\n`;
-  // 包间数测试
-  const rooms = areaList.filter(a => (a.typeName || '').includes('包') && a.delflg === 0);
-  msg += `\n包间数（typeName含包+delflg=0）: ${rooms.length}\n`;
-  msg += `包间列表: ${rooms.map(a => a.name + '/' + a.typeName).join(', ')}`;
-  alert(msg);
-  console.log('[调试]', json);
-};
-
-// 午市/晚市判断阈值（小时*60+分钟）
-const NOON_RANGES = {
-  default: [9 * 60, 16 * 60],       // [540, 960]
-  '宁波':   [8 * 60, 15.5 * 60],     // [480, 930]
-  '小馆':   [9 * 60, 15 * 60],       // [540, 900]
-  '仙人洞': [9 * 60, 14.5 * 60],     // [540, 870]
-};
-
-function isNoon(shopName, orderTime) {
-  const h = orderTime ? orderTime.match(/T?(\d{2}):(\d{2})/) : null;
-  if (!h) return false;
-  const mins = parseInt(h[1]) * 60 + parseInt(h[2]);
-  const range = NOON_RANGES[shopName] || NOON_RANGES.default;
-  return mins >= range[0] && mins <= range[1];
-}
-
-// 查询单门店包间数（getServiceArea，typeName 含"包"，delflg=0）
+// 查询单门店包间数（getServiceArea）
 async function queryShopRooms(shopId) {
   const cacheKey = `rooms_${shopId}`;
   if (OCCUPY_CACHE[cacheKey] !== undefined) return OCCUPY_CACHE[cacheKey];
-
   let rooms = 0;
   try {
-    const qs = `centerId=${API_CONFIG.centerId}&shopId=${shopId}&pageNo=1&pageSize=500`;
+    const qs = `centerId=${API_CONFIG.centerId}&shopId=${shopId}&pageNo=1&pageSize=200`;
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), 12000);
     const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getServiceArea?${qs}`, {
@@ -704,156 +656,90 @@ async function queryShopRooms(shopId) {
     });
     clearTimeout(tid);
     const json = await res.json();
-    const list = json?.data?.areaList || [];
-    rooms = list.filter(a => {
-      const typeName = a.typeName || '';
-      const isRoom = typeName.includes('包') || typeName.includes('包间');
-      const isActive = a.delflg === 0 || a.delflg === '0' || a.isEnable === true;
-      return isRoom && isActive;
-    }).length;
+    const list = json?.data?.areaList || json?.data?.pointList || [];
+    rooms = list.filter(a => (a.typeName || '').includes('包') && a.delflg === 0).length;
   } catch (e) {
-    // fallback：尝试 pointList 字段
-    try {
-      const qs = `centerId=${API_CONFIG.centerId}&shopId=${shopId}&pageNo=1&pageSize=500`;
-      const controller = new AbortController();
-      const tid = setTimeout(() => controller.abort(), 12000);
-      const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getServiceArea?${qs}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
-        signal: controller.signal,
-      });
-      clearTimeout(tid);
-      const json = await res.json();
-      // 有些接口返回 pointList
-      const list = json?.data?.pointList || [];
-      rooms = list.filter(a => {
-        const typeName = a.typeName || '';
-        return (typeName.includes('包') || typeName.includes('包间')) && (a.delflg === 0 || a.delflg === '0' || a.isEnable === true);
-      }).length;
-    } catch (_) {}
+    console.warn(`[包间数查询失败] 门店${shopId}`, e.message);
   }
-
   OCCUPY_CACHE[cacheKey] = rooms;
   return rooms;
 }
 
-// 查询单门店指定日期预订单（getserialdata），返回 { noon: N, evening: N }
-async function queryReserve(settleDate, shopId, dateType = 1) {
-  const cacheKey = `rsv_${shopId}_${settleDate}_${dateType}`;
+// 查询单门店指定日期范围预订数据（getBookOrderDetailData）
+// 返回 { noon: N, evening: N }（午市/晚市预订数，排除已取消）
+async function queryBookOrders(shopId, beginDate, endDate) {
+  const cacheKey = `book_${shopId}_${beginDate}_${endDate}`;
   if (OCCUPY_CACHE[cacheKey] !== undefined) return OCCUPY_CACHE[cacheKey];
 
-  const shopInfo = ALL_SHOPS.find(s => String(s.centerId) === String(shopId));
-  const shopName = shopInfo?.name || '';
-
   let noon = 0, evening = 0;
-  let pageNo = 1;
-  const pageSize = 500;
-  let totalPages = 1;
-
   try {
-    while (pageNo <= totalPages) {
-      const qs = `centerId=${API_CONFIG.centerId}&shopId=${shopId}&settleDate=${settleDate}&dateType=${dateType}&pageNo=${pageNo}&pageSize=${pageSize}&orderType=2`;
-      const controller = new AbortController();
-      const tid = setTimeout(() => controller.abort(), 12000);
-      try {
-        const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getserialdata?${qs}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
-          signal: controller.signal,
-        });
-        clearTimeout(tid);
-        const json = await res.json();
-        const bills = json?.data?.billList || [];
-        if (bills.length === 0) break;
-        totalPages = json?.data?.pageInfo?.pageTotal || 1;
-
-        bills.forEach(b => {
-          const pointType = (b.point_type_name || '').toLowerCase();
-          if (!pointType.includes('包')) return;
-          const orderTime = b.order_time || b.create_time || b.settle_time || '';
-          if (isNoon(shopName, orderTime)) {
-            noon++;
-          } else {
-            evening++;
-          }
-        });
-
-        pageNo++;
-      } catch (e) {
-        clearTimeout(tid);
-        break;
-      }
-    }
+    // orderTimeType=1：按预订日期查；begin/end 格式 YYYY-MM-DD HH:MM:SS
+    const begin = `${beginDate} 00:00:00`;
+    const end = `${endDate} 23:59:59`;
+    const qs = `centerId=${API_CONFIG.centerId}&shopId=${shopId}&orderTimeType=1&begin=${encodeURIComponent(begin)}&end=${encodeURIComponent(end)}`;
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 15000);
+    const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBookOrderDetailData?${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
+      signal: controller.signal,
+    });
+    clearTimeout(tid);
+    const json = await res.json();
+    const list = json?.data?.data || [];
+    list.forEach(b => {
+      // 排除已取消
+      if ((b.bookState || '').includes('取消')) return;
+      const shift = b.shift || '';
+      if (shift.includes('午')) noon++;
+      else if (shift.includes('晚')) evening++;
+    });
   } catch (e) {
-    console.warn(`[预订查询失败] ${settleDate} 门店${shopId}`, e.message);
+    console.warn(`[预订查询失败] 门店${shopId} ${beginDate}~${endDate}`, e.message);
   }
 
-  const result = { noon, evening };
-  OCCUPY_CACHE[cacheKey] = result;
-  return result;
+  OCCUPY_CACHE[cacheKey] = { noon, evening };
+  return { noon, evening };
 }
 
 // 查询指定日期所有门店出租率（dateType=1日/2月/3年）
 async function queryOccupancyAll(settleDate, dateType = 1) {
-  // 第一步：并发查所有门店包间数
   const shopIds = ALL_SHOPS.map(s => s.centerId);
+
+  // 第一步：并发查所有门店包间数
   const roomTasks = shopIds.map(sid => () => queryShopRooms(sid));
   const roomResults = await batchQuery(roomTasks, 10);
 
-  // 第二步：并发查所有门店预订单（按月份/年份时跳过，逐日统计）
+  // 第二步：查预订数（按维度确定日期范围）
   let reserveResults;
-  if (dateType === 2) {
-    // 月维度：拆成每天查，再汇总到月
-    const [year, month] = settleDate.split('-');
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const dayTasks = [];
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dayDate = `${year}-${p(month)}-${p(d)}`;
-      shopIds.forEach(sid => {
-        dayTasks.push(() => queryReserve(dayDate, sid, 1));
-      });
-    }
-    const dayResults = await batchQuery(dayTasks, 15);
-    // 汇总到门店级别（dayResults 每组 daysInMonth 条）
+  if (dateType === 1) {
+    // 日维度：查当天
+    const tasks = shopIds.map(sid => () => queryBookOrders(sid, settleDate, settleDate));
+    const rResults = await batchQuery(tasks, 10);
     const shops = {};
-    shopIds.forEach((sid, si) => {
-      let noonTotal = 0, eveningTotal = 0;
-      for (let d = 0; d < daysInMonth; d++) {
-        const r = dayResults[d * shopIds.length + si] || { noon: 0, evening: 0 };
-        noonTotal += r.noon || 0;
-        eveningTotal += r.evening || 0;
-      }
-      shops[sid] = { noon: noonTotal, evening: eveningTotal, rooms: roomResults[si] || 0 };
+    shopIds.forEach((sid, i) => {
+      shops[sid] = { ...(rResults[i] || { noon: 0, evening: 0 }), rooms: roomResults[i] || 0 };
     });
     reserveResults = { shops };
-  } else if (dateType === 3) {
-    // 年维度：拆成每天查，再汇总
-    const year = settleDate;
-    const dayTasks = [];
-    for (let m = 1; m <= 12; m++) {
-      const daysInMonth = new Date(year, m, 0).getDate();
-      for (let d = 1; d <= daysInMonth; d++) {
-        const dayDate = `${year}-${p(m)}-${p(d)}`;
-        shopIds.forEach(sid => {
-          dayTasks.push(() => queryReserve(dayDate, sid, 1));
-        });
-      }
-    }
-    const dayResults = await batchQuery(dayTasks, 15);
+  } else if (dateType === 2) {
+    // 月维度：查整月
+    const [year, month] = settleDate.split('-');
+    const begin = `${year}-${month}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const end = `${year}-${month}-${p(lastDay)}`;
+    const tasks = shopIds.map(sid => () => queryBookOrders(sid, begin, end));
+    const rResults = await batchQuery(tasks, 10);
     const shops = {};
-    shopIds.forEach((sid, si) => {
-      let noonTotal = 0, eveningTotal = 0;
-      for (let i = si; i < dayResults.length; i += shopIds.length) {
-        const r = dayResults[i] || { noon: 0, evening: 0 };
-        noonTotal += r.noon || 0;
-        eveningTotal += r.evening || 0;
-      }
-      shops[sid] = { noon: noonTotal, evening: eveningTotal, rooms: roomResults[si] || 0 };
+    shopIds.forEach((sid, i) => {
+      shops[sid] = { ...(rResults[i] || { noon: 0, evening: 0 }), rooms: roomResults[i] || 0 };
     });
     reserveResults = { shops };
   } else {
-    // 日维度：直接查
-    const tasks = shopIds.map(sid => () => queryReserve(settleDate, sid, 1));
+    // 年维度：查全年
+    const year = settleDate;
+    const begin = `${year}-01-01`;
+    const end = `${year}-12-31`;
+    const tasks = shopIds.map(sid => () => queryBookOrders(sid, begin, end));
     const rResults = await batchQuery(tasks, 10);
     const shops = {};
     shopIds.forEach((sid, i) => {
