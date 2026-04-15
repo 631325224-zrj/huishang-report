@@ -95,6 +95,18 @@ tr.grandtot:hover td { background: #ffe680 !important; }
 .loading-bar-text { font-size: 14px; color: #c0392b; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 42px; text-align: right; }
 .footer { text-align: center; font-size: 11px; color: #ccc; margin-top: 8px; }
 canvas { display: block; }
+/* ═══ 出租率报表样式 ═══ */
+.occ-summary { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 12px; }
+.occ-card { background: #fff; border-radius: 12px; padding: 16px 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); text-align: center; }
+.occ-card .lbl { font-size: 12px; color: #888; margin-bottom: 6px; }
+.occ-card .pct { font-size: 28px; font-weight: 700; color: #c0392b; }
+.occ-card .sub { font-size: 11px; color: #bbb; margin-top: 4px; }
+.occ-bar { height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+.occ-bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg,#e74c3c,#c0392b); transition: width 0.4s; }
+.occ-bar-fill.mid { background: linear-gradient(90deg,#f39c12,#e67e22); }
+.occ-bar-fill.low { background: linear-gradient(90deg,#3498db,#2980b9); }
+.c-pct2 { text-align: center !important; width: 90px; }
+@media (max-width: 900px) { .occ-summary { grid-template-columns: 1fr; } }
 @media (max-width: 900px) {
   .charts-grid { grid-template-columns: 1fr; }
   .summary-strip { grid-template-columns: 1fr 1fr; }
@@ -140,6 +152,7 @@ canvas { display: block; }
       <button class="dim-btn btn btn-active" data-dim="day">日报</button>
       <button class="dim-btn btn" data-dim="month">月报</button>
       <button class="dim-btn btn" data-dim="year">年报</button>
+      <button class="dim-btn btn" data-dim="occupy">出租率</button>
     </div>
     <div class="ctrl-divider"></div>
 
@@ -172,6 +185,26 @@ canvas { display: block; }
       <span class="ctrl-label">年 vs</span>
       <select id="selYearPrev"></select>
     </div>
+
+    <div id="ctrl-occupy" class="ctrl-group" style="display:none">
+      <span class="ctrl-label">统计维度</span>
+      <select id="selOccupyDim">
+        <option value="day">按日</option>
+        <option value="month">按月</option>
+        <option value="year">按年</option>
+      </select>
+      <span class="ctrl-label">日期</span>
+      <input type="date" id="occDateA">
+      <span id="ctrl-occ-month" class="ctrl-group" style="display:none;gap:4px">
+        <select id="selOccYearA"></select><span class="ctrl-label">年</span>
+        <select id="selOccMonthA"></select>
+      </span>
+      <span id="ctrl-occ-year" class="ctrl-group" style="display:none;gap:4px">
+        <select id="selOccYearOnly"></select><span class="ctrl-label">年</span>
+      </span>
+      <button id="btnQueryOccupy" class="btn btn-primary" style="margin-left:6px">查询</button>
+      <span id="occ-loading" class="ctrl-loading" style="display:none">↻ 查询预订数据…</span>
+    </div>
     <div class="ctrl-divider"></div>
 
     <div class="ctrl-group">
@@ -188,6 +221,59 @@ canvas { display: block; }
     <div class="ctrl-hint" id="ctrl-hint"></div>
   </div>
 
+  <!-- ══ 出租率报表区域 ══ -->
+  <div id="occupy-section" style="display:none">
+    <div class="occ-summary">
+      <div class="occ-card">
+        <div class="lbl">🌞 午市出租率</div>
+        <div class="pct" id="occ-noon-pct">—</div>
+        <div class="sub" id="occ-noon-sub">午市预订 — / 总包间 —</div>
+        <div class="occ-bar"><div class="occ-bar-fill" id="occ-noon-bar" style="width:0%"></div></div>
+      </div>
+      <div class="occ-card">
+        <div class="lbl">🌙 晚市出租率</div>
+        <div class="pct" id="occ-eve-pct">—</div>
+        <div class="sub" id="occ-eve-sub">晚市预订 — / 总包间 —</div>
+        <div class="occ-bar"><div class="occ-bar-fill" id="occ-eve-bar" style="width:0%"></div></div>
+      </div>
+      <div class="occ-card">
+        <div class="lbl">📊 全天出租率</div>
+        <div class="pct" id="occ-total-pct">—</div>
+        <div class="sub" id="occ-total-sub">午+晚合计 — / 总包间×2 —</div>
+        <div class="occ-bar"><div class="occ-bar-fill" id="occ-total-bar" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-header">
+        <span id="occ-table-title">各门店出租率明细</span>
+        <span class="badge" id="occ-table-badge"></span>
+        <span class="meta" id="occ-table-meta"></span>
+        <div class="actions">
+          <button class="btn btn-export" onclick="exportOccupancy()">📥 导出</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th class="c-name">门店</th>
+              <th style="width:70px;text-align:center">包间数</th>
+              <th class="c-pct2">🌞午市预订</th>
+              <th class="c-pct2">午市出租率</th>
+              <th class="c-pct2">🌙晚市预订</th>
+              <th class="c-pct2">晚市出租率</th>
+              <th class="c-pct2">合计预订</th>
+              <th class="c-pct2">全天出租率</th>
+            </tr>
+          </thead>
+          <tbody id="occ-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="summary-strip-wrap">
   <div class="summary-strip">
     <div class="scard">
       <div class="lbl" id="sc-label-a">当期营收</div>
@@ -210,7 +296,9 @@ canvas { display: block; }
       <div class="comp" id="sc-pct-sub">—</div>
     </div>
   </div>
+  </div>
 
+  <div id="charts-section-wrap">
   <div class="charts-toggle">
     <button class="btn btn-primary" id="btnToggleCharts" onclick="toggleCharts()">📊 收起趋势图</button>
   </div>
@@ -224,7 +312,9 @@ canvas { display: block; }
       <div style="height:220px"><canvas id="chartLine"></canvas></div>
     </div>
   </div>
+  </div>
 
+  <div id="revenue-table-wrap">
   <div class="table-card">
     <div class="table-header">
       <span id="table-title">各门店经营数据</span>
@@ -248,6 +338,7 @@ canvas { display: block; }
         <tbody id="tbody"></tbody>
       </table>
     </div>
+  </div>
   </div>
 
   <div class="footer">
@@ -306,6 +397,38 @@ const ALL_SHOPS = [
 const REGION_ORDER = ['北京','华北','合肥','皖北','浙沪','黄山','华南'];
 const MONTH_NAMES  = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 
+// 各门店包间数量（从汇总表截图读取）
+const SHOP_ROOMS = {
+  247413: 31,  // 朝阳门店
+  247414: 15,  // 三里河店
+  247415: 21,  // 广安门店
+  247416: 15,  // 元大都店
+  247417: 19,  // 双井店
+  247418: 27,  // 天津店
+  247419: 14,  // 济南店
+  247420: 18,  // 罍街店
+  247421: 21,  // 大蜀山店
+  247422: 18,  // 贡街店
+  247423: 0,   // 小馆店（无包间）
+  247424: 19,  // 水西门店
+  247425: 21,  // 芜湖店
+  247426: 18,  // 骆岗店
+  247427: 18,  // 云城里店
+  247428: 9,   // 繁昌店
+  247429: 16,  // 虹桥店
+  247430: 10,  // 陆家嘴店
+  247431: 7,   // 宁波店
+  247432: 12,  // 杭州店
+  247433: 12,  // 昆山店
+  247434: 17,  // 蚌埠店
+  247435: 12,  // 滁州店
+  247436: 15,  // 阜阳店
+  247437: 22,  // 六安店
+  247438: 11,  // 淮南店
+  247439: 24,  // 仙人洞店
+  247440: 23,  // 深圳店
+};
+
 // ════════ 全局状态 ════════
 let DATA = null;
 let STATE = {
@@ -314,7 +437,13 @@ let STATE = {
   dateA:null, dateB:null,
   yearOnly:null, yearPrev:null,
   region:'', shop:'',
+  // 出租率相关
+  occDim: 'day',   // 出租率统计维度：day/month/year
+  occDateA: null,  // 出租率日期（按日）
+  occYearA: null,  // 出租率年份（按月/年）
+  occMonthA: null, // 出租率月份（按月）
 };
+let OCC_DATA = null; // 出租率数据缓存（当前查询结果）
 let chartBar=null, chartLine=null;
 let chartsCollapsed = false;
 let token = null;
@@ -502,6 +631,80 @@ async function batchQuery(tasks, concurrency=10, onProgress) {
     if (onProgress) onProgress(Math.round((completed / total) * 100));
   }
   return results;
+}
+
+// ══════════════════════════════════════════════════════════
+// 出租率模块：预订数据查询
+// API: datatransfer/getReserveList  （收银系统预订查询接口）
+// 午市 mealType=1，晚市 mealType=2
+// 只统计客位类型为"包间"的预订
+// ══════════════════════════════════════════════════════════
+const OCCUPY_CACHE = {}; // 出租率数据缓存
+
+// 查询单门店指定日期预订数据，返回 { noon: N, evening: N }（包间预订数量）
+async function queryReserve(settleDate, centerId, shopId, dateType = 1) {
+  const cacheKey = `rsv_${shopId}_${settleDate}_${dateType}`;
+  if (OCCUPY_CACHE[cacheKey] !== undefined) return OCCUPY_CACHE[cacheKey];
+
+  let noon = 0, evening = 0;
+  try {
+    // 尝试调用预订查询接口（分午晚市两次，或一次性获取后筛选）
+    const results = await Promise.all([1, 2].map(async mealType => {
+      const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${settleDate}&dateType=${dateType}&mealType=${mealType}&pageNo=1&pageSize=500`;
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 12000);
+      try {
+        const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getReserveList?${qs}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
+          signal: controller.signal,
+        });
+        clearTimeout(tid);
+        const json = await res.json();
+        // 统计客位类型为"包间"的预订数（已到店 + 预约中，不含取消）
+        const list = json?.data?.list || json?.data?.reserveList || [];
+        return list.filter(r => {
+          const seatType = (r.seatTypeName || r.seat_type_name || r.clientType || '').toLowerCase();
+          const status = String(r.status || r.reserveStatus || '');
+          // 包间：客位类型名包含"包" 或 seatType=room/vip/private
+          const isRoom = seatType.includes('包') || seatType.includes('vip') || seatType === 'room';
+          // 排除已取消的预订
+          const isCancelled = status === '3' || status === 'cancel' || seatType.includes('取消');
+          return isRoom && !isCancelled;
+        }).length;
+      } catch (e) {
+        clearTimeout(tid);
+        return 0;
+      }
+    }));
+    noon = results[0];
+    evening = results[1];
+  } catch (e) {
+    console.warn(`[预订查询失败] ${settleDate} 门店${shopId}`, e.message);
+  }
+
+  const result = { noon, evening };
+  OCCUPY_CACHE[cacheKey] = result;
+  return result;
+}
+
+// 查询指定日期所有门店出租率（dateType=1日/2月/3年）
+// 返回: { shops: { centerId: { noon, evening, rooms } } }
+async function queryOccupancyAll(settleDate, dateType = 1) {
+  const shopIds = ALL_SHOPS.filter(s => (SHOP_ROOMS[s.centerId] || 0) > 0);
+  const results = await batchQuery(
+    shopIds.map(s => () => queryReserve(settleDate, API_CONFIG.centerId, s.centerId, dateType)),
+    8
+  );
+  const shops = {};
+  shopIds.forEach((s, i) => {
+    shops[s.centerId] = {
+      noon: results[i]?.noon || 0,
+      evening: results[i]?.evening || 0,
+      rooms: SHOP_ROOMS[s.centerId] || 0,
+    };
+  });
+  return { shops };
 }
 
 function updateProgress(percent, text) {
@@ -1143,6 +1346,24 @@ function initSelectors() {
     document.getElementById('topbar-time').textContent = '数据更新 ' + d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
   }
 
+  // ── 出租率控件初始化 ──
+  const occNow = new Date();
+  const occToday = `${occNow.getFullYear()}-${p(occNow.getMonth()+1)}-${p(occNow.getDate())}`;
+  STATE.occDateA = occToday;
+  STATE.occYearA = occNow.getFullYear();
+  STATE.occMonthA = occNow.getMonth() + 1;
+  const occDateEl = document.getElementById('occDateA');
+  if (occDateEl) { occDateEl.value = occToday; occDateEl.max = occToday; }
+  // 年月选择器
+  const occYearOpts = availableYears.slice().reverse().map(y => `<option value="${y}">${y}</option>`).join('');
+  ['selOccYearA','selOccYearOnly'].forEach(id => { const el = document.getElementById(id); if (el) { el.innerHTML = occYearOpts; el.value = occNow.getFullYear(); } });
+  const selOccMonthA = document.getElementById('selOccMonthA');
+  if (selOccMonthA) {
+    selOccMonthA.innerHTML = MONTH_NAMES.map((m,i) => `<option value="${i+1}">${m}</option>`).join('');
+    selOccMonthA.value = occNow.getMonth() + 1;
+  }
+  updateOccupyCtrl();
+
   bindEvents();
 }
 
@@ -1154,11 +1375,17 @@ function bindEvents() {
       btn.classList.add('btn-active');
       STATE.dim = btn.dataset.dim;
       console.log('[年报点击] STATE.dim =', STATE.dim, '| yearOnly =', STATE.yearOnly, '| yearPrev =', STATE.yearPrev);
-      document.getElementById('ctrl-day').style.display   = STATE.dim === 'day'   ? '' : 'none';
-      document.getElementById('ctrl-month').style.display = STATE.dim === 'month' ? '' : 'none';
-      document.getElementById('ctrl-year').style.display   = STATE.dim === 'year'  ? '' : 'none';
-      updateBSelector();
-      render();
+      document.getElementById('ctrl-day').style.display    = STATE.dim === 'day'    ? '' : 'none';
+      document.getElementById('ctrl-month').style.display  = STATE.dim === 'month'  ? '' : 'none';
+      document.getElementById('ctrl-year').style.display   = STATE.dim === 'year'   ? '' : 'none';
+      document.getElementById('ctrl-occupy').style.display = STATE.dim === 'occupy' ? '' : 'none';
+      // 出租率维度：显示出租率区域，隐藏普通报表区域
+      const isOccupy = STATE.dim === 'occupy';
+      document.getElementById('occupy-section').style.display     = isOccupy ? '' : 'none';
+      document.getElementById('summary-strip-wrap').style.display  = isOccupy ? 'none' : '';
+      document.getElementById('charts-section-wrap').style.display = isOccupy ? 'none' : '';
+      document.getElementById('revenue-table-wrap').style.display  = isOccupy ? 'none' : '';
+      if (!isOccupy) { updateBSelector(); render(); }
     });
   });
 
@@ -1233,6 +1460,232 @@ function bindEvents() {
     STATE.dateB = prev;
     render();
   });
+
+  // ── 出租率控件事件 ──
+  const selOccDim = document.getElementById('selOccupyDim');
+  if (selOccDim) {
+    selOccDim.addEventListener('change', e => {
+      STATE.occDim = e.target.value;
+      updateOccupyCtrl();
+    });
+  }
+  const btnQueryOcc = document.getElementById('btnQueryOccupy');
+  if (btnQueryOcc) {
+    btnQueryOcc.addEventListener('click', () => renderOccupancy());
+  }
+  const occDateEl = document.getElementById('occDateA');
+  if (occDateEl) occDateEl.addEventListener('change', e => { STATE.occDateA = e.target.value; });
+  const selOccYA = document.getElementById('selOccYearA');
+  if (selOccYA) selOccYA.addEventListener('change', e => { STATE.occYearA = +e.target.value; });
+  const selOccMA = document.getElementById('selOccMonthA');
+  if (selOccMA) selOccMA.addEventListener('change', e => { STATE.occMonthA = +e.target.value; });
+  const selOccYOnly = document.getElementById('selOccYearOnly');
+  if (selOccYOnly) selOccYOnly.addEventListener('change', e => { STATE.occYearA = +e.target.value; });
+}
+
+// ════════ 出租率控件显隐切换 ════════
+function updateOccupyCtrl() {
+  const d = STATE.occDim;
+  const dateEl    = document.getElementById('occDateA');
+  const monthGrp  = document.getElementById('ctrl-occ-month');
+  const yearGrp   = document.getElementById('ctrl-occ-year');
+  if (dateEl)   dateEl.style.display   = d === 'day'   ? '' : 'none';
+  if (monthGrp) monthGrp.style.display = d === 'month' ? '' : 'none';
+  if (yearGrp)  yearGrp.style.display  = d === 'year'  ? '' : 'none';
+}
+
+// ════════ 出租率渲染 ════════
+async function renderOccupancy() {
+  const loadingEl = document.getElementById('occ-loading');
+  const tbody = document.getElementById('occ-tbody');
+  if (loadingEl) { loadingEl.style.display = ''; }
+  if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#aaa">查询中…</td></tr>';
+
+  // 确定查询日期/月份/年份
+  let settleDate = STATE.occDateA;
+  let dateType = 1;
+  if (STATE.occDim === 'month') {
+    settleDate = `${STATE.occYearA}-${p(STATE.occMonthA)}-01`;
+    dateType = 2;
+  } else if (STATE.occDim === 'year') {
+    settleDate = `${STATE.occYearA}-01-01`;
+    dateType = 3;
+  }
+
+  try {
+    const result = await queryOccupancyAll(settleDate, dateType);
+    OCC_DATA = result;
+    renderOccupancyTable(result, settleDate);
+  } catch (e) {
+    console.error('[出租率查询失败]', e);
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#c0392b">查询失败，请重试</td></tr>';
+  } finally {
+    if (loadingEl) loadingEl.style.display = 'none';
+  }
+}
+
+function renderOccupancyTable(result, settleDate) {
+  const shops = result.shops;
+
+  // 过滤：只显示有包间的门店
+  let filteredShops = ALL_SHOPS.filter(s => {
+    const rooms = SHOP_ROOMS[s.centerId] || 0;
+    if (rooms === 0) return false;
+    if (STATE.region && s.region !== STATE.region) return false;
+    if (STATE.shop && s.name !== STATE.shop) return false;
+    return true;
+  });
+
+  // 汇总全局
+  let totalRooms = 0, totalNoon = 0, totalEvening = 0;
+  filteredShops.forEach(s => {
+    const d = shops[s.centerId] || { noon: 0, evening: 0, rooms: SHOP_ROOMS[s.centerId] || 0 };
+    totalRooms    += d.rooms;
+    totalNoon     += d.noon;
+    totalEvening  += d.evening;
+  });
+
+  const noonPct  = totalRooms > 0 ? (totalNoon / totalRooms * 100) : 0;
+  const evePct   = totalRooms > 0 ? (totalEvening / totalRooms * 100) : 0;
+  const totalPct = totalRooms > 0 ? ((totalNoon + totalEvening) / (totalRooms * 2) * 100) : 0;
+
+  const fmtPct = v => v.toFixed(1) + '%';
+  const barCls = v => v >= 60 ? '' : (v >= 30 ? 'mid' : 'low');
+
+  // 汇总卡片
+  document.getElementById('occ-noon-pct').textContent    = fmtPct(noonPct);
+  document.getElementById('occ-noon-sub').textContent    = `午市预订 ${totalNoon} / 总包间 ${totalRooms}`;
+  document.getElementById('occ-noon-bar').style.width    = Math.min(noonPct, 100) + '%';
+  document.getElementById('occ-noon-bar').className      = 'occ-bar-fill ' + barCls(noonPct);
+
+  document.getElementById('occ-eve-pct').textContent     = fmtPct(evePct);
+  document.getElementById('occ-eve-sub').textContent     = `晚市预订 ${totalEvening} / 总包间 ${totalRooms}`;
+  document.getElementById('occ-eve-bar').style.width     = Math.min(evePct, 100) + '%';
+  document.getElementById('occ-eve-bar').className       = 'occ-bar-fill ' + barCls(evePct);
+
+  document.getElementById('occ-total-pct').textContent   = fmtPct(totalPct);
+  document.getElementById('occ-total-sub').textContent   = `午+晚合计 ${totalNoon+totalEvening} / 总包间×2 ${totalRooms*2}`;
+  document.getElementById('occ-total-bar').style.width   = Math.min(totalPct, 100) + '%';
+  document.getElementById('occ-total-bar').className     = 'occ-bar-fill ' + barCls(totalPct);
+
+  // 表头标题
+  let dimLabel = settleDate;
+  if (STATE.occDim === 'month') dimLabel = `${STATE.occYearA}年${MONTH_NAMES[STATE.occMonthA-1]}`;
+  else if (STATE.occDim === 'year') dimLabel = `${STATE.occYearA}年`;
+  document.getElementById('occ-table-title').textContent = `${dimLabel} 各门店出租率明细`;
+  document.getElementById('occ-table-badge').textContent = `${filteredShops.length} 家门店`;
+  document.getElementById('occ-table-meta').textContent  = `总包间 ${totalRooms} 间`;
+
+  // 表格渲染（按区域分组）
+  const tbody = document.getElementById('occ-tbody');
+  tbody.innerHTML = '';
+
+  const groupedByRegion = {};
+  filteredShops.forEach(s => {
+    if (!groupedByRegion[s.region]) groupedByRegion[s.region] = [];
+    groupedByRegion[s.region].push(s);
+  });
+
+  const sortedRegions = Object.keys(groupedByRegion).sort((a, b) => {
+    const ai = REGION_ORDER.indexOf(a), bi = REGION_ORDER.indexOf(b);
+    return (ai === -1 ? 9 : ai) - (bi === -1 ? 9 : bi);
+  });
+
+  let grandNoon = 0, grandEve = 0, grandRooms = 0;
+
+  sortedRegions.forEach(region => {
+    const regionShops = groupedByRegion[region];
+    let rNoon = 0, rEve = 0, rRooms = 0;
+
+    // 区域标题行
+    const hdr = document.createElement('tr');
+    hdr.className = 'subtot';
+    hdr.innerHTML = `<td class="c-name">📍 ${region}区域</td><td colspan="7" style="text-align:right;padding-right:12px;font-size:11px">共 ${regionShops.length} 家门店</td>`;
+    tbody.appendChild(hdr);
+
+    regionShops.forEach(s => {
+      const d = shops[s.centerId] || { noon: 0, evening: 0, rooms: SHOP_ROOMS[s.centerId] || 0 };
+      const rooms = d.rooms;
+      const nPct  = rooms > 0 ? d.noon / rooms * 100 : 0;
+      const ePct  = rooms > 0 ? d.evening / rooms * 100 : 0;
+      const tPct  = rooms > 0 ? (d.noon + d.evening) / (rooms * 2) * 100 : 0;
+      rNoon += d.noon; rEve += d.evening; rRooms += rooms;
+      grandNoon += d.noon; grandEve += d.evening; grandRooms += rooms;
+
+      const pctCell = (v) => {
+        const cls = v >= 60 ? 'c-up' : (v >= 30 ? '' : 'c-down');
+        return `<td class="c-pct2 ${cls}">${fmtPct(v)}</td>`;
+      };
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="c-name" style="padding-left:24px">${s.name}</td>
+        <td style="text-align:center">${rooms}</td>
+        <td class="c-pct2">${d.noon}</td>
+        ${pctCell(nPct)}
+        <td class="c-pct2">${d.evening}</td>
+        ${pctCell(ePct)}
+        <td class="c-pct2">${d.noon + d.evening}</td>
+        ${pctCell(tPct)}`;
+      tbody.appendChild(tr);
+    });
+
+    // 区域汇总
+    const rNoonP  = rRooms > 0 ? rNoon / rRooms * 100 : 0;
+    const rEveP   = rRooms > 0 ? rEve / rRooms * 100 : 0;
+    const rTotalP = rRooms > 0 ? (rNoon + rEve) / (rRooms * 2) * 100 : 0;
+    const rTr = document.createElement('tr');
+    rTr.className = 'subtot';
+    rTr.innerHTML = `
+      <td class="c-name" style="padding-left:12px">${region}区域汇总</td>
+      <td style="text-align:center">${rRooms}</td>
+      <td class="c-pct2">${rNoon}</td><td class="c-pct2">${fmtPct(rNoonP)}</td>
+      <td class="c-pct2">${rEve}</td><td class="c-pct2">${fmtPct(rEveP)}</td>
+      <td class="c-pct2">${rNoon+rEve}</td><td class="c-pct2">${fmtPct(rTotalP)}</td>`;
+    tbody.appendChild(rTr);
+  });
+
+  // 总计行
+  const gNoonP  = grandRooms > 0 ? grandNoon / grandRooms * 100 : 0;
+  const gEveP   = grandRooms > 0 ? grandEve / grandRooms * 100 : 0;
+  const gTotalP = grandRooms > 0 ? (grandNoon + grandEve) / (grandRooms * 2) * 100 : 0;
+  const gTr = document.createElement('tr');
+  gTr.className = 'grandtot';
+  gTr.innerHTML = `
+    <td class="c-name">🏢 总部汇总</td>
+    <td style="text-align:center">${grandRooms}</td>
+    <td class="c-pct2">${grandNoon}</td><td class="c-pct2">${fmtPct(gNoonP)}</td>
+    <td class="c-pct2">${grandEve}</td><td class="c-pct2">${fmtPct(gEveP)}</td>
+    <td class="c-pct2">${grandNoon+grandEve}</td><td class="c-pct2">${fmtPct(gTotalP)}</td>`;
+  tbody.appendChild(gTr);
+}
+
+// ════════ 出租率导出 ════════
+function exportOccupancy() {
+  if (!OCC_DATA) { alert('请先查询出租率数据'); return; }
+  const shops = OCC_DATA.shops;
+  let dimLabel = STATE.occDateA;
+  if (STATE.occDim === 'month') dimLabel = `${STATE.occYearA}年${MONTH_NAMES[STATE.occMonthA-1]}`;
+  else if (STATE.occDim === 'year') dimLabel = `${STATE.occYearA}年`;
+
+  let csv = '\uFEFF';
+  csv += `徽商故里出租率报表 - ${dimLabel}\n`;
+  csv += `区域,门店,包间数,午市预订,午市出租率,晚市预订,晚市出租率,合计预订,全天出租率\n`;
+
+  ALL_SHOPS.filter(s => (SHOP_ROOMS[s.centerId] || 0) > 0).forEach(s => {
+    const d = shops[s.centerId] || { noon: 0, evening: 0, rooms: SHOP_ROOMS[s.centerId] || 0 };
+    const rooms = d.rooms;
+    const nPct  = rooms > 0 ? (d.noon / rooms * 100).toFixed(1) + '%' : '0%';
+    const ePct  = rooms > 0 ? (d.evening / rooms * 100).toFixed(1) + '%' : '0%';
+    const tPct  = rooms > 0 ? ((d.noon + d.evening) / (rooms * 2) * 100).toFixed(1) + '%' : '0%';
+    csv += `${s.region},${s.name},${rooms},${d.noon},${nPct},${d.evening},${ePct},${d.noon+d.evening},${tPct}\n`;
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `徽商故里_出租率_${dimLabel}.csv`; a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ════════ 月份选项动态过滤（全局，根据年份只显示有数据的月份）════════
