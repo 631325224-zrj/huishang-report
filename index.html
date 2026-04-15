@@ -643,12 +643,13 @@ const OCCUPY_CACHE = {}; // 出租率缓存
 
 // 查询单门店包间数（getServiceArea）
 // 结构：areaList[i].pointList[j] — 客位类型在 pointList 的 typeName 字段中
-async function queryShopRooms(shopId) {
-  const cacheKey = `rooms_${shopId}`;
+// 注意：此接口只传 centerId，不传 shopId
+async function queryShopRooms(centerId) {
+  const cacheKey = `rooms_${centerId}`;
   if (OCCUPY_CACHE[cacheKey] !== undefined) return OCCUPY_CACHE[cacheKey];
   let rooms = 0;
   try {
-    const qs = `centerId=${API_CONFIG.centerId}&shopId=${shopId}&pageNo=1&pageSize=200`;
+    const qs = `centerId=${centerId}&pageNo=1&pageSize=200`;
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), 12000);
     const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getServiceArea?${qs}`, {
@@ -670,9 +671,9 @@ async function queryShopRooms(shopId) {
       }).length;
       rooms += roomCount;
     });
-    console.log(`[包间数] 门店${shopId}: ${rooms}间`, json?.data?.areaList?.length + '个区域');
+    console.log(`[包间数] centerId=${centerId}: ${rooms}间`, areaList.length + '个区域');
   } catch (e) {
-    console.warn(`[包间数查询失败] 门店${shopId}`, e.message);
+    console.warn(`[包间数查询失败] centerId=${centerId}`, e.message);
   }
   OCCUPY_CACHE[cacheKey] = rooms;
   return rooms;
@@ -687,14 +688,22 @@ async function queryBookOrders(shopId, beginDate, endDate) {
   let noon = 0, evening = 0;
   try {
     // orderTimeType=1：按预订日期查；begin/end 格式 YYYY-MM-DD HH:MM:SS
+    // 注意：getBookOrderDetailData 的 centerId/shopId 需与 getBusinessSituation 保持一致
     const begin = `${beginDate} 00:00:00`;
     const end = `${endDate} 23:59:59`;
-    const qs = `centerId=${API_CONFIG.centerId}&shopId=${shopId}&orderTimeType=1&begin=${encodeURIComponent(begin)}&end=${encodeURIComponent(end)}`;
+    const body = JSON.stringify({
+      centerId: API_CONFIG.centerId,
+      shopId: shopId, // 传入的是 centerId (247xxx)
+      orderTimeType: 1,
+      begin,
+      end
+    });
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), 15000);
-    const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBookOrderDetailData?${qs}`, {
+    const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBookOrderDetailData`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
+      body,
       signal: controller.signal,
     });
     clearTimeout(tid);
@@ -719,7 +728,7 @@ async function queryBookOrders(shopId, beginDate, endDate) {
 async function queryOccupancyAll(settleDate, dateType = 1) {
   const shopIds = ALL_SHOPS.map(s => s.centerId);
 
-  // 第一步：并发查所有门店包间数
+  // 第一步：并发查所有门店包间数（getServiceArea 只用 centerId）
   const roomTasks = shopIds.map(sid => () => queryShopRooms(sid));
   const roomResults = await batchQuery(roomTasks, 10);
 
@@ -1753,36 +1762,39 @@ function exportOccupancy() {
 window.debugOccupancy = async function() {
   try {
     const token = localStorage.getItem('wdtoken') || '';
-    // 广安店 centerId=247415，用它作为 shopId
-    const shopId = '247415';
-    const centerId = API_CONFIG.centerId;
+    const corpCenterId = API_CONFIG.centerId; // 247412
 
-    // 测试1: getServiceArea（用 POST body 格式）
-    let msg = '=== getServiceArea ===\n';
-    const body1 = JSON.stringify({ centerId, shopId: parseInt(shopId), pageNo: 1, pageSize: 50 });
-    const r1 = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getServiceArea`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
-      body: body1
-    });
-    const j1 = await r1.json();
-    msg += 'code: ' + j1.code + '\n';
-    msg += 'data: ' + JSON.stringify(j1.data)?.slice(0, 200) + '\n';
-    const areaList = j1.data?.areaList || [];
-    msg += 'areaList count: ' + areaList.length + '\n';
-    if (areaList.length > 0) {
-      msg += 'areaList[0] keys: ' + Object.keys(areaList[0]).join(', ') + '\n';
-      msg += 'areaList[0]: ' + JSON.stringify(areaList[0]).slice(0, 300) + '\n';
-      const roomAreas = areaList.filter(a => (a.name || '').includes('包') || (a.typeName || '').includes('包'));
-      msg += '\n含包间的区域: ' + roomAreas.length;
+    // 测试 getServiceArea：分别测 corporation centerId 和 shop centerId
+    let msg = '=== getServiceArea 多 centerId 测试 ===\n';
+    const testCenterIds = [corpCenterId, 247415, 247413, 247414];
+
+    for (const cid of testCenterIds) {
+      msg += `\n--- centerId=${cid} ---\n`;
+      const r1 = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getServiceArea?centerId=${cid}&pageNo=1&pageSize=50`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' }
+      });
+      const j1 = await r1.json();
+      msg += 'code: ' + j1.code + '  areaList: ' + (j1.data?.areaList?.length || 0) + '\n';
+      const areaList = j1.data?.areaList || [];
+      if (areaList.length > 0) {
+        const pointList = areaList[0].pointList || [];
+        msg += 'areaList[0].keys: ' + Object.keys(areaList[0]).join(', ') + '\n';
+        if (pointList.length > 0) msg += 'pointList[0]: ' + JSON.stringify(pointList[0]) + '\n';
+        const rooms = areaList.reduce((sum, a) => {
+          const pl = a.pointList || [];
+          return sum + pl.filter(p => (p.typeName || '').includes('包') && (p.isEnable === true || p.isEnable === 'true') && (p.delflg === 0 || p.delflg === '0')).length;
+        }, 0);
+        msg += '包间数: ' + rooms + (rooms > 0 ? ' ✓' : '');
+      }
     }
 
-    // 测试2: getBookOrderDetailData（POST body 格式）
+    // 测试 getBookOrderDetailData
     msg += '\n\n=== getBookOrderDetailData ===\n';
     const today = '2026-04-15';
     const body2 = JSON.stringify({
-      centerId,
-      shopId: parseInt(shopId),
+      centerId: corpCenterId,
+      shopId: 247415, // 广安店 centerId 用作 shopId
       orderTimeType: 1,
       begin: today + ' 00:00:00',
       end: today + ' 23:59:59'
@@ -1793,17 +1805,12 @@ window.debugOccupancy = async function() {
       body: body2
     });
     const j2 = await r2.json();
-    msg += 'code: ' + j2.code + '\n';
-    msg += 'data: ' + JSON.stringify(j2.data)?.slice(0, 200) + '\n';
-    const orders = j2.data?.data || [];
-    msg += '订单数: ' + orders.length + '\n';
-    if (orders.length > 0) {
-      msg += 'orders[0] keys: ' + Object.keys(orders[0]).join(', ') + '\n';
-      msg += 'orders[0]: ' + JSON.stringify(orders[0]).slice(0, 400) + '\n';
+    msg += 'code: ' + j2.code + '  orders: ' + (j2.data?.data?.length || 0) + '\n';
+    if (j2.data?.data?.length > 0) {
+      msg += 'orders[0]: ' + JSON.stringify(j2.data.data[0]).slice(0, 400) + '\n';
     }
 
     alert(msg);
-    console.log('[调试 getServiceArea]', j1);
     console.log('[调试 getBookOrderDetailData]', j2);
   } catch (e) {
     alert('调试失败: ' + e.message);
