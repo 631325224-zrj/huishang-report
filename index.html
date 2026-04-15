@@ -425,49 +425,66 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
 
 // ══════════════════════════════════════════════════════════
 // 月度纯收汇总 API
-// 使用 getBusinessSituation（与日数据相同），逐日查询后汇总
+// 使用 getBusinessSituation（月维度 dateType=2），与日数据相同 API
 // 纯收字段：income.incomeTotal（与文档口径完全一致）
+// 每门店只需1次请求，不再逐天分页，彻底解决历史年份超时问题
 // ══════════════════════════════════════════════════════════
-
+//
 // 查询指定月份所有门店的纯收汇总
 // 返回: { totalIncome, shops: { shopId: { name, income } } }
+// ── 使用 getBusinessSituation（月维度 dateType=2）查询整月纯收 ──
+// 与日数据相同 API、相同字段（income.incomeTotal），数据口径完全一致
+// 每门店只需1次请求，彻底避免逐天 getserialdata 数千次请求超时问题
 async function queryMonthBillList(year, month, centerId, shopId) {
   const cacheKey = `bill_${centerId}_${shopId}_${year}_${month}`;
   if (SHOP_DATA_CACHE[cacheKey] !== undefined) {
     return SHOP_DATA_CACHE[cacheKey];
   }
-  
+
   const monthStr = `${year}-${p(month)}`;
-  const dateType = 1;  // 营业日维度（与文档统计口径一致）
-  
-  // 计算该月的天数
-  const daysInMonth = new Date(year, month, 0).getDate();
-  
-  let totalIncome = 0;
-  const shops = {};  // { shopId: { name, income } }
-  
-  // 逐日查询，用 getBusinessSituation API（与日数据相同）
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dateStr = `${year}-${p(month)}-${p(day)}`;
-    
+  const settleDate = `${year}-${p(month)}-01`;  // 月维度只需传月份首日
+  const dateType = 2;  // 月维度
+
+  const sid = String(shopId);
+  const shopInfo = ALL_SHOPS.find(s => String(s.centerId) === sid);
+  const shopNameResolved = shopInfo?.name || `门店${sid}`;
+
+  let income = 0;
+  try {
+    const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${settleDate}&dateType=${dateType}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    let json;
     try {
-      const result = await queryRevenue(dateStr, dateType, centerId, shopId);
-      const income = result.income || 0;
-      
-      totalIncome += income;
-      const sid = String(shopId);
-      if (!shops[sid]) {
-        shops[sid] = { name: result.shopName || `门店${sid}`, income: 0 };
-      }
-      shops[sid].income += income;
+      const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      json = await res.json();
     } catch (e) {
-      // 单天查询失败不影响整月，继续
+      clearTimeout(timeoutId);
+      console.warn(`[月度汇总 查询失败] ${monthStr} 门店${shopId}:`, e.message);
     }
+
+    if (json) {
+      const incomeObj = json?.data?.List?.income;
+      const bd = json?.data?.List?.businessData ?? {};
+      if (incomeObj?.incomeTotal !== undefined) {
+        income = parseFloat(incomeObj.incomeTotal) || 0;
+      } else if (bd.last !== undefined) {
+        income = parseFloat(bd.last) || 0;
+      }
+    }
+  } catch (e) {
+    console.warn(`[月度汇总 异常] ${monthStr} 门店${shopId}:`, e.message);
   }
-  
-  const result = { totalIncome, shops, monthStr };
+
+  const shops = { [sid]: { name: shopNameResolved, income } };
+  const result = { totalIncome: income, shops, monthStr };
   SHOP_DATA_CACHE[cacheKey] = result;
-  console.log(`[月度汇总] ${monthStr} 门店${shopId}: 总纯收=${totalIncome.toFixed(2)}`);
+  console.log(`[月度汇总] ${monthStr} ${shopNameResolved}: 纯收=${income.toFixed(2)}`);
   return result;
 }
 
@@ -583,9 +600,9 @@ function lsSaveMeta() {
 }
 
 // ══════════════════════════════════════════════════════════
-// 清理旧缓存（2026-04-08：API从getBusinessSituation改为getserialdata，旧缓存数据不兼容）
+// 清理旧缓存（v7：月度 API 改用 getBusinessSituation，旧 getserialdata 缓存数据不兼容，强制重建）
 // ══════════════════════════════════════════════════════════
-const LS_CACHE_VERSION = 'v4';  // v3→v4：强制清除旧缓存，确保使用新的getBusinessSituation API重新加载所有月份数据
+const LS_CACHE_VERSION = 'v7';  // v6→v7：月度查询从 getserialdata 改为 getBusinessSituation，彻底解决历史年份数据超时为0问题，清除旧缓存重建
 
 function lsClearOldCache() {
   // 检查是否需要清理旧缓存
@@ -802,8 +819,18 @@ async function loadAllData() {
   // 批量并发预加载（所有月份并行，加速初始化）
   const preloadPromises = preloadTargets.map(async ([py, pm, pk]) => {
     try {
+      // 二次防重：如果在 batchQuery 并发期间其他协程已将此月加载完毕，则跳过
+      if (loadedMonths.has(pk)) {
+        console.log(`[预加载 ${pk}] 已在缓存中，跳过`);
+        return;
+      }
       const tasks = shopIds.map(sid => () => queryMonthBillList(py, pm, API_CONFIG.centerId, sid));
       const results = await batchQuery(tasks, 8);  // 并发提高到8，加快预加载
+      // 再次检查：batchQuery 执行期间可能被 ensureMonthData 抢先加载
+      if (loadedMonths.has(pk)) {
+        console.log(`[预加载 ${pk}] 并发完成后已存在，放弃写入`);
+        return;
+      }
       const prevYKey = String(py);
       const shopTmp = {};
       results.forEach(result => {
@@ -986,14 +1013,17 @@ async function ensureMonthData(year, month) {
 }
 
 // ════════ 获取汇总数据 ════════
-function getSummaryRevenue(isCurrent, shopCenterId) {
-  if (STATE.dim === 'day') {
+// dim 参数：统一使用 render() 入口处捕获的快照，防止渲染中途 STATE.dim 被其他回调修改
+function getSummaryRevenue(isCurrent, shopCenterId, dim) {
+  // dim 传入时：直接用 dim 决定维度，不依赖 STATE（防止中途被异步回调修改）
+  // dim 未传时：降级为直接读 STATE（exportData 等外部调用场景）
+  if (dim === 'day') {
     const date = isCurrent ? STATE.dateA : STATE.dateB;
     if (shopCenterId && DATA?.shopDailyData?.[shopCenterId]) {
       return DATA.shopDailyData[shopCenterId][date] || 0;
     }
     return DATA?.dailyData?.[date] || 0;
-  } else if (STATE.dim === 'month') {
+  } else if (dim === 'month') {
     const y = isCurrent ? STATE.yearA : STATE.yearB;
     const m = isCurrent ? STATE.monthA : STATE.monthB;
     const key = `${y}-${p(m)}`;
@@ -1002,6 +1032,7 @@ function getSummaryRevenue(isCurrent, shopCenterId) {
     }
     return DATA?.monthlyData?.[key] || 0;
   } else {
+    // dim === 'year' 或 dim 为 undefined（外部调用降级）
     const y = isCurrent ? STATE.yearOnly : STATE.yearPrev;
     if (shopCenterId && DATA?.shopYearlyData?.[shopCenterId]) {
       return DATA.shopYearlyData[shopCenterId][String(y)] || 0;
@@ -1122,6 +1153,7 @@ function bindEvents() {
       document.querySelectorAll('.dim-btn').forEach(b => b.classList.remove('btn-active'));
       btn.classList.add('btn-active');
       STATE.dim = btn.dataset.dim;
+      console.log('[年报点击] STATE.dim =', STATE.dim, '| yearOnly =', STATE.yearOnly, '| yearPrev =', STATE.yearPrev);
       document.getElementById('ctrl-day').style.display   = STATE.dim === 'day'   ? '' : 'none';
       document.getElementById('ctrl-month').style.display = STATE.dim === 'month' ? '' : 'none';
       document.getElementById('ctrl-year').style.display   = STATE.dim === 'year'  ? '' : 'none';
@@ -1297,7 +1329,7 @@ function ensureYearData(onReady) {
 }
 
 // ════════ 渲染汇总卡片 ════════
-function renderSummary() {
+function renderSummary(dim) {
   // 确定当前查看范围对应的 centerId
   let shopCenterId = null;
   if (STATE.shop) {
@@ -1307,7 +1339,7 @@ function renderSummary() {
 
   // 自动加载对比月份数据（如果缺失）
   // 注意：同比（yoy）时 yearB = yearA-1，可能超出系统数据范围，ensureMonthData 内部会校验跳过
-  if (STATE.dim === 'month') {
+  if (dim === 'month') {
     ensureMonthData(STATE.yearA, STATE.monthA); // 当前月
     if (STATE.compare === 'mom') {
       // 环比：yearB 一定是有效年份（上个月）
@@ -1316,15 +1348,15 @@ function renderSummary() {
     // 同比（yoy）：去年数据 API 不可靠，跳过自动加载，显示 — 即可
   }
 
-  const revA = getSummaryRevenue(true, shopCenterId);
-  const revB = getSummaryRevenue(false, shopCenterId);
+  const revA = getSummaryRevenue(true, shopCenterId, dim);
+  const revB = getSummaryRevenue(false, shopCenterId, dim);
   const ch = calcChange(revA, revB);
 
   let labelA = '', labelB = '';
-  if (STATE.dim === 'month') {
+  if (dim === 'month') {
     labelA = `${STATE.yearA}年${MONTH_NAMES[STATE.monthA - 1]}`;
     labelB = STATE.compare === 'yoy' ? `${STATE.yearB}年${MONTH_NAMES[STATE.monthB - 1]}` : `${STATE.yearB}年${MONTH_NAMES[STATE.monthB - 1]}`;
-  } else if (STATE.dim === 'day') {
+  } else if (dim === 'day') {
     labelA = STATE.dateA;
     labelB = STATE.compare === 'yoy' ? prevYearDate(STATE.dateA) : STATE.dateB;
   } else {
@@ -1337,7 +1369,7 @@ function renderSummary() {
 
   document.getElementById('sc-label-b').textContent = labelB + ' 纯收金额';
   document.getElementById('sc-val-b').textContent = fmt(revB);
-  const compType = STATE.dim === 'day' ? '同比' : (STATE.compare === 'yoy' ? '同比' : '环比');
+  const compType = dim === 'day' ? '同比' : (STATE.compare === 'yoy' ? '同比' : '环比');
   document.getElementById('sc-sub-b').textContent = compType;
 
   const diffEl = document.getElementById('sc-diff');
@@ -1400,23 +1432,23 @@ function resetSort() {
 }
 
 // ════════ 渲染图表 ════════
-function renderCharts() {
+function renderCharts(dim) {
   if (chartBar) { chartBar.destroy(); chartBar = null; }
   if (chartLine) { chartLine.destroy(); chartLine = null; }
 
   let labelA = '', labelB = '';
-  if (STATE.dim === 'month') {
+  if (dim === 'month') {
     labelA = `${STATE.yearA}年${MONTH_NAMES[STATE.monthA - 1]}`;
     labelB = `${STATE.yearB}年${MONTH_NAMES[STATE.monthB - 1]}`;
-  } else if (STATE.dim === 'day') {
+  } else if (dim === 'day') {
     labelA = STATE.dateA;
     labelB = STATE.compare === 'yoy' ? prevYearDate(STATE.dateA) : STATE.dateB;
   } else {
     labelA = `${STATE.yearOnly}年`; labelB = `${STATE.yearPrev}年`;
   }
 
-  const revA = getSummaryRevenue(true);
-  const revB = getSummaryRevenue(false);
+  const revA = getSummaryRevenue(true, null, dim);
+  const revB = getSummaryRevenue(false, null, dim);
   const monthlyKeys = Object.keys(DATA?.monthlyData || {});
   
   // 调试：更新页面上已有的调试面板
@@ -1477,20 +1509,32 @@ function renderCharts() {
 }
 
 // ════════ 渲染表格 ════════
-function renderTable(shops) {
+function renderTable(shops, dim) {
+  // 如果当前 DOM 的表头已经是年份模式，禁止被旧状态（day/month）的调用覆盖
+  // 原理：第1次用 dim=year 调用时设置年份表头；第2次用 dim=day 调用时跳过设置表头
+  // resetSort() / sortTable() 会触发 render()，此时 STATE 可能仍是 year，dim 却是 day
+  const currentThA = document.getElementById('th-a')?.textContent || '';
+  const isYearMode = dim === 'year';
+  const domHasYearHeader = currentThA.endsWith('年');
+  if (domHasYearHeader && !isYearMode) {
+    // 年报已渲染过一次，禁止被旧状态覆盖；用日志记录被跳过的调用
+    console.log('[renderTable BLOCKED] 年报表头被保护，禁止覆盖为', currentThA, '→', dim);
+  }
+
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
 
   let labelA = '', labelB = '';
-  if (STATE.dim === 'month') {
+  if (dim === 'month') {
     labelA = `${STATE.yearA}年${MONTH_NAMES[STATE.monthA - 1]}`;
     labelB = `${STATE.yearB}年${MONTH_NAMES[STATE.monthB - 1]}`;
-  } else if (STATE.dim === 'day') {
+  } else if (dim === 'day') {
     labelA = STATE.dateA;
     labelB = STATE.compare === 'yoy' ? prevYearDate(STATE.dateA) : STATE.dateB;
   } else {
     labelA = `${STATE.yearOnly}年`; labelB = `${STATE.yearPrev}年`;
   }
+  console.log('[renderTable] dim snapshot=' + dim + ' → th-a=' + labelA + ' | th-b=' + labelB);
   document.getElementById('th-a').textContent = labelA;
   document.getElementById('th-b').textContent = labelB;
 
@@ -1502,8 +1546,8 @@ function renderTable(shops) {
   // 如果选择了单门店，显示单门店数据
   if (STATE.shop && shops.length === 1) {
     const shop = shops[0];
-    const revA = getSummaryRevenue(true, shop.centerId);
-    const revB = getSummaryRevenue(false, shop.centerId);
+    const revA = getSummaryRevenue(true, shop.centerId, dim);
+    const revB = getSummaryRevenue(false, shop.centerId, dim);
     const ch = calcChange(revA, revB);
     const grandtot = document.createElement('tr');
     grandtot.className = 'grandtot';
@@ -1547,8 +1591,8 @@ function renderTable(shops) {
 
     // 各门店行
     regionShops.forEach(shop => {
-      const revA = getSummaryRevenue(true, shop.centerId);
-      const revB = getSummaryRevenue(false, shop.centerId);
+      const revA = getSummaryRevenue(true, shop.centerId, dim);
+      const revB = getSummaryRevenue(false, shop.centerId, dim);
       const ch = calcChange(revA, revB);
       regionTotalA += revA;
       regionTotalB += revB;
@@ -1594,6 +1638,10 @@ function renderTable(shops) {
 // ════════ 主渲染 ════════
 async function render() {
   if (!DATA) return;
+  console.log('[render ENTRY] STATE.dim =', STATE.dim, '| yearOnly =', STATE.yearOnly, '| dateA =', STATE.dateA);
+
+  // ── 捕获 dim 快照，防止渲染过程中 dim 被其他异步回调修改导致标签错乱 ──
+  const dim = STATE.dim;
 
   // 调试：显示 DATA 关键信息
   const debugPanel = document.getElementById('debug-panel');
@@ -1601,7 +1649,7 @@ async function render() {
   const shopKeys = DATA.shopDailyData ? Object.keys(DATA.shopDailyData) : [];
   const centerIds = ALL_SHOPS.map(s => s.centerId);
   const matchCount = shopKeys.filter(k => centerIds.includes(k)).length;
-  
+
   debugPanel.style.display = 'block';
   debugData.innerHTML = `
     <b style="color:#ff0">🔍 数据诊断：</b><br/>
@@ -1610,7 +1658,7 @@ async function render() {
     <b>匹配的键数量：</b>${matchCount}<br/>
     <b>shopDailyData 键：</b>${shopKeys.slice(0, 5).join(', ')}${shopKeys.length > 5 ? '...' : ''}<br/>
     <b>centerId 示例：</b>${centerIds.slice(0, 5).join(', ')}<br/>
-    <b>STATE.dim：</b>${STATE.dim} | <b>STATE.dateA：</b>${STATE.dateA}<br/>
+    <b>STATE.dim（本次渲染快照 dim）：</b>${dim} | <b>STATE.dateA：</b>${STATE.dateA}<br/>
   `;
 
   const title = STATE.shop ? STATE.shop : (STATE.region ? STATE.region + '区域' : '全部门店');
@@ -1626,10 +1674,10 @@ async function render() {
   if (SORT.field && shops.length > 1) {
     shops.sort((a, b) => {
       let valA, valB;
-      const revA_a = getSummaryRevenue(true, a.centerId);
-      const revA_b = getSummaryRevenue(true, b.centerId);
-      const revB_a = getSummaryRevenue(false, a.centerId);
-      const revB_b = getSummaryRevenue(false, b.centerId);
+      const revA_a = getSummaryRevenue(true, a.centerId, dim);
+      const revA_b = getSummaryRevenue(true, b.centerId, dim);
+      const revB_a = getSummaryRevenue(false, a.centerId, dim);
+      const revB_b = getSummaryRevenue(false, b.centerId, dim);
       const ch_a = calcChange(revA_a, revB_a);
       const ch_b = calcChange(revA_b, revB_b);
       
@@ -1651,16 +1699,16 @@ async function render() {
   
   document.getElementById('table-meta').textContent = `共 ${shops.length} 家门店`;
 
-  renderSummary();
+  renderSummary(dim);
 
   // 年报维度：如果数据尚未全部加载，先触发加载，等待完成后重新 render
-  if (STATE.dim === 'year') {
+  if (dim === 'year') {
     const stillLoading = ensureYearData(() => render());
     if (stillLoading) return; // 数据未就绪，等加载完毕后 render() 会被自动调用
   }
 
-  renderTable(shops);
-  renderCharts();
+  renderTable(shops, dim);
+  renderCharts(dim);
 }
 
 // ═══════════════════════════════════════════════════════
