@@ -642,6 +642,7 @@ async function batchQuery(tasks, concurrency=10, onProgress) {
 const OCCUPY_CACHE = {}; // 出租率缓存
 
 // 查询单门店包间数（getServiceArea）
+// 结构：areaList[i].pointList[j] — 客位类型在 pointList 的 typeName 字段中
 async function queryShopRooms(shopId) {
   const cacheKey = `rooms_${shopId}`;
   if (OCCUPY_CACHE[cacheKey] !== undefined) return OCCUPY_CACHE[cacheKey];
@@ -657,8 +658,19 @@ async function queryShopRooms(shopId) {
     });
     clearTimeout(tid);
     const json = await res.json();
-    const list = json?.data?.areaList || json?.data?.pointList || [];
-    rooms = list.filter(a => (a.typeName || '').includes('包') && a.delflg === 0).length;
+    const areaList = json?.data?.areaList || [];
+    // 遍历每个消费区域，累加 pointList 中的包间数量
+    areaList.forEach(area => {
+      const pointList = area.pointList || [];
+      const roomCount = pointList.filter(p => {
+        const typeName = p.typeName || '';
+        const isRoom = typeName.includes('包');
+        const isActive = p.isEnable === true && (p.delflg === 0 || p.delflg === '0');
+        return isRoom && isActive;
+      }).length;
+      rooms += roomCount;
+    });
+    console.log(`[包间数] 门店${shopId}: ${rooms}间`, json?.data?.areaList?.length + '个区域');
   } catch (e) {
     console.warn(`[包间数查询失败] 门店${shopId}`, e.message);
   }
@@ -1751,15 +1763,26 @@ window.debugOccupancy = async function() {
     });
     const j1 = await r1.json();
     const keys1 = Object.keys(j1.data || {});
-    const list1 = j1.data?.areaList || j1.data?.pointList || [];
+    const areaList = j1.data?.areaList || [];
     msg += 'data keys: ' + keys1.join(', ') + '\n';
-    msg += 'list count: ' + list1.length + '\n';
-    if (list1.length > 0) {
-      msg += 'list[0] keys: ' + Object.keys(list1[0]).join(', ') + '\n';
-      msg += 'list[0]: ' + JSON.stringify(list1[0]) + '\n';
+    msg += 'areaList count: ' + areaList.length + '\n';
+    if (areaList.length > 0) {
+      msg += 'areaList[0] keys: ' + Object.keys(areaList[0]).join(', ') + '\n';
+      msg += 'areaList[0]: ' + JSON.stringify(areaList[0]) + '\n';
+      const pointList = areaList[0].pointList || [];
+      msg += '\nareaList[0].pointList count: ' + pointList.length + '\n';
+      if (pointList.length > 0) {
+        msg += 'pointList[0] keys: ' + Object.keys(pointList[0]).join(', ') + '\n';
+        msg += 'pointList[0]: ' + JSON.stringify(pointList[0]) + '\n';
+      }
     }
-    const rooms = list1.filter(a => (a.typeName || '').includes('包'));
-    msg += '\n包间数(typeName含包): ' + rooms.length;
+    // 计算包间数
+    let rooms = 0;
+    areaList.forEach(area => {
+      const pl = area.pointList || [];
+      rooms += pl.filter(p => (p.typeName || '').includes('包') && p.isEnable === true && (p.delflg === 0 || p.delflg === '0')).length;
+    });
+    msg += '\n包间数(areaList[].pointList typeName含包): ' + rooms;
     if (rooms.length > 0) msg += '\n包间示例: ' + JSON.stringify(rooms[0]);
 
     // 测试2: getBookOrderDetailData
