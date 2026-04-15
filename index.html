@@ -251,6 +251,7 @@ canvas { display: block; }
         <span class="meta" id="occ-table-meta"></span>
         <div class="actions">
           <button class="btn btn-export" onclick="exportOccupancy()">📥 导出</button>
+          <button class="btn btn-export" onclick="debugGetServiceArea()" style="background:#e67e22">🔧 调试包间</button>
         </div>
       </div>
       <div class="table-scroll">
@@ -644,6 +645,31 @@ async function batchQuery(tasks, concurrency=10, onProgress) {
 //   仙人洞：9:00~14:30 午市，14:30 后晚市
 // ══════════════════════════════════════════════════════════
 const OCCUPY_CACHE = {}; // 出租率缓存
+
+// ═══ 临时调试函数 ═══
+window.debugGetServiceArea = async function() {
+  const token = localStorage.getItem('wdtoken') || '';
+  const shopId = '159'; // 先用广安店测试
+  const res = await fetch(`https://boss.huiShang56.com/datatransfer/getServiceArea?centerId=247412&shopId=${shopId}&pageNo=1&pageSize=50`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': 'huiShang', 'granttype': 'client' }
+  });
+  const json = await res.json();
+  const keys = Object.keys(json.data || {});
+  const areaList = json.data?.areaList || [];
+  const pointList = json.data?.pointList || [];
+  let msg = `data keys: ${keys.join(', ')}\n`;
+  msg += `areaList count: ${areaList.length}\n`;
+  msg += `pointList count: ${pointList.length}\n`;
+  if (areaList.length > 0) msg += `areaList[0] keys: ${Object.keys(areaList[0]).join(', ')}\nareaList[0]: ${JSON.stringify(areaList[0])}\n`;
+  if (pointList.length > 0) msg += `pointList[0] keys: ${Object.keys(pointList[0]).join(', ')}\npointList[0]: ${JSON.stringify(pointList[0])}\n`;
+  // 包间数测试
+  const rooms = areaList.filter(a => (a.typeName || '').includes('包') && a.delflg === 0);
+  msg += `\n包间数（typeName含包+delflg=0）: ${rooms.length}\n`;
+  msg += `包间列表: ${rooms.map(a => a.name + '/' + a.typeName).join(', ')}`;
+  alert(msg);
+  console.log('[调试]', json);
+};
 
 // 午市/晚市判断阈值（小时*60+分钟）
 const NOON_RANGES = {
