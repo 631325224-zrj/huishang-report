@@ -1753,55 +1753,53 @@ function exportOccupancy() {
 window.debugOccupancy = async function() {
   try {
     const token = localStorage.getItem('wdtoken') || '';
-    const shopId = '159'; // 广安店测试
+    // 广安店 centerId=247415，用它作为 shopId
+    const shopId = '247415';
+    const centerId = API_CONFIG.centerId;
 
-    // 测试1: getServiceArea
+    // 测试1: getServiceArea（用 POST body 格式）
     let msg = '=== getServiceArea ===\n';
-    const r1 = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getServiceArea?centerId=${API_CONFIG.centerId}&shopId=${shopId}&pageNo=1&pageSize=50`, {
+    const body1 = JSON.stringify({ centerId, shopId: parseInt(shopId), pageNo: 1, pageSize: 50 });
+    const r1 = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getServiceArea`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' }
+      headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
+      body: body1
     });
     const j1 = await r1.json();
-    const keys1 = Object.keys(j1.data || {});
+    msg += 'code: ' + j1.code + '\n';
+    msg += 'data: ' + JSON.stringify(j1.data)?.slice(0, 200) + '\n';
     const areaList = j1.data?.areaList || [];
-    msg += 'data keys: ' + keys1.join(', ') + '\n';
     msg += 'areaList count: ' + areaList.length + '\n';
     if (areaList.length > 0) {
       msg += 'areaList[0] keys: ' + Object.keys(areaList[0]).join(', ') + '\n';
-      msg += 'areaList[0]: ' + JSON.stringify(areaList[0]) + '\n';
-      const pointList = areaList[0].pointList || [];
-      msg += '\nareaList[0].pointList count: ' + pointList.length + '\n';
-      if (pointList.length > 0) {
-        msg += 'pointList[0] keys: ' + Object.keys(pointList[0]).join(', ') + '\n';
-        msg += 'pointList[0]: ' + JSON.stringify(pointList[0]) + '\n';
-      }
+      msg += 'areaList[0]: ' + JSON.stringify(areaList[0]).slice(0, 300) + '\n';
+      const roomAreas = areaList.filter(a => (a.name || '').includes('包') || (a.typeName || '').includes('包'));
+      msg += '\n含包间的区域: ' + roomAreas.length;
     }
-    // 计算包间数
-    let rooms = 0;
-    areaList.forEach(area => {
-      const pl = area.pointList || [];
-      rooms += pl.filter(p => (p.typeName || '').includes('包') && p.isEnable === true && (p.delflg === 0 || p.delflg === '0')).length;
-    });
-    msg += '\n包间数(areaList[].pointList typeName含包): ' + rooms;
-    if (rooms.length > 0) msg += '\n包间示例: ' + JSON.stringify(rooms[0]);
 
-    // 测试2: getBookOrderDetailData
+    // 测试2: getBookOrderDetailData（POST body 格式）
     msg += '\n\n=== getBookOrderDetailData ===\n';
     const today = '2026-04-15';
-    const r2 = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBookOrderDetailData?centerId=${API_CONFIG.centerId}&shopId=${shopId}&orderTimeType=1&begin=${today}%2006:30:00&end=${today}%2023:59:59`, {
+    const body2 = JSON.stringify({
+      centerId,
+      shopId: parseInt(shopId),
+      orderTimeType: 1,
+      begin: today + ' 00:00:00',
+      end: today + ' 23:59:59'
+    });
+    const r2 = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBookOrderDetailData`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' }
+      headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
+      body: body2
     });
     const j2 = await r2.json();
+    msg += 'code: ' + j2.code + '\n';
+    msg += 'data: ' + JSON.stringify(j2.data)?.slice(0, 200) + '\n';
     const orders = j2.data?.data || [];
     msg += '订单数: ' + orders.length + '\n';
     if (orders.length > 0) {
       msg += 'orders[0] keys: ' + Object.keys(orders[0]).join(', ') + '\n';
-      msg += 'orders[0]: ' + JSON.stringify(orders[0]) + '\n';
-      const noonOrders = orders.filter(o => o.shift === '午市');
-      const eveOrders = orders.filter(o => o.shift === '晚市');
-      msg += '\n午市订单: ' + noonOrders.length;
-      msg += '\n晚市订单: ' + eveOrders.length;
+      msg += 'orders[0]: ' + JSON.stringify(orders[0]).slice(0, 400) + '\n';
     }
 
     alert(msg);
