@@ -1757,9 +1757,9 @@ window.debugOccupancy = async function() {
 
     // 测试1: getServiceArea
     let msg = '=== getServiceArea ===\n';
-    const r1 = await fetch(`https://boss.huiShang56.com/datatransfer/getServiceArea?centerId=247412&shopId=${shopId}&pageNo=1&pageSize=50`, {
+    const r1 = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getServiceArea?centerId=${API_CONFIG.centerId}&shopId=${shopId}&pageNo=1&pageSize=50`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': 'huiShang', 'granttype': 'client' }
+      headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' }
     });
     const j1 = await r1.json();
     const keys1 = Object.keys(j1.data || {});
@@ -1788,9 +1788,9 @@ window.debugOccupancy = async function() {
     // 测试2: getBookOrderDetailData
     msg += '\n\n=== getBookOrderDetailData ===\n';
     const today = '2026-04-15';
-    const r2 = await fetch(`https://boss.huiShang56.com/datatransfer/getBookOrderDetailData?centerId=247412&shopId=${shopId}&orderTimeType=1&begin=${today}%2006:30:00&end=${today}%2023:59:59`, {
+    const r2 = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBookOrderDetailData?centerId=${API_CONFIG.centerId}&shopId=${shopId}&orderTimeType=1&begin=${today}%2006:30:00&end=${today}%2023:59:59`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': 'huiShang', 'granttype': 'client' }
+      headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' }
     });
     const j2 = await r2.json();
     const orders = j2.data?.data || [];
