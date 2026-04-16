@@ -1754,7 +1754,10 @@ function exportOccupancy() {
 // ════════ 调试函数 ════════
 window.debugOccupancy = async function() {
   try {
-    const token = localStorage.getItem('wdtoken') || '';
+    // 通过 getToken() 获取 token（和主代码一致），而不是 localStorage.getItem('wdtoken')
+    const token = await getToken();
+    if (!token) { alert('Token获取失败，请检查网络'); return; }
+
     // 文档说明：centerId = 餐饮集团ID，shopId = 所属门店ID（可选）
     // 备用：groupNo = 商龙云集团号（G144388去掉G=144388），shopNo = 商龙云门店号（C295213去掉C=295213）
     // 已知：API_CONFIG.centerId=247412（集团），朝阳店=247413，广安门店=247415
