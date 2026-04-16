@@ -1790,8 +1790,30 @@ window.debugOccupancy = async function() {
       msg += '\n';
     }
 
+    // 测试 queryShopRooms 和 queryBookOrders（与主代码相同）
+    msg += '\n\n=== queryShopRooms 测试（调用主代码）===\n';
+    const shopRoomCount = await window.queryShopRoomsTest ? window.queryShopRoomsTest() : (async () => {
+      const qs = `centerId=${corpCenterId}&shopId=247415&pageNo=1&pageSize=200`;
+      const r = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getServiceArea?${qs}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' }
+      });
+      const j = await r.json();
+      const areaList = j.data?.areaList || [];
+      const rooms = areaList.reduce((s, a) => s + (a.pointList||[]).filter(p=>(p.typeName||'').includes('包')&&p.isEnable===true&&p.delflg===0).length, 0);
+      return { code:j.code, areaListCount: areaList.length, rooms, firstArea: areaList[0]?.name };
+    })();
+    if (typeof shopRoomCount === 'object') {
+      msg += `code=${shopRoomCount.code} 区域数=${shopRoomCount.areaListCount} 包间数=${shopRoomCount.rooms} 首区域=${shopRoomCount.firstArea}\n`;
+      if (shopRoomCount.areaListCount > 0 && shopRoomCount.rooms === 0) {
+        msg += '⚠️ 区域有数据但包间为0！检查 typeName 和 isEnable\n';
+      }
+    } else {
+      msg += `queryShopRooms结果=${shopRoomCount}\n`;
+    }
+
     // 测试 getBookOrderDetailData
-    msg += '=== getBookOrderDetailData (广安店今日) ===\n';
+    msg += '\n=== getBookOrderDetailData (广安店今日) ===\n';
     const today = new Date().toISOString().slice(0,10);
     const qs2 = `centerId=247412&shopId=247415&orderTimeType=1&begin=${encodeURIComponent(today+' 00:00:00')}&end=${encodeURIComponent(today+' 23:59:59')}`;
     const r2 = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBookOrderDetailData?${qs2}`, {
@@ -1801,7 +1823,10 @@ window.debugOccupancy = async function() {
     const j2 = await r2.json();
     msg += `code=${j2.code} msg=${j2.msg} 订单数=${j2.data?.data?.length ?? '-'}\n`;
     if (j2.data?.data?.length > 0) {
+      msg += 'orders[0] keys: ' + Object.keys(j2.data.data[0]).join(',') + '\n';
       msg += 'orders[0]: ' + JSON.stringify(j2.data.data[0]).slice(0, 400) + '\n';
+    } else {
+      msg += '完整data: ' + JSON.stringify(j2.data) + '\n';
     }
 
     alert(msg);
