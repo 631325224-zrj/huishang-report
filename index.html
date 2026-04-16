@@ -663,6 +663,10 @@ async function queryShopRooms(shopId) {
     // 遍历每个消费区域，累加 pointList 中的包间数量
     areaList.forEach(area => {
       const pointList = area.pointList || [];
+      // 诊断：打印所有 pointList 的 typeName（只对 shopId=247415 打印前3个区域）
+      if (shopId === 247415 && areaList.indexOf(area) < 3) {
+        console.log(`[shopId=247415 诊断] 区域=${area.name} pointList=${pointList.length}`, pointList.map(p=>({typeName:p.typeName,typeCode:p.typeCode,isEnable:p.isEnable,delflg:p.delflg,name:p.name})));
+      }
       const roomCount = pointList.filter(p => {
         const typeName = p.typeName || '';
         const isRoom = typeName.includes('包');
@@ -671,7 +675,7 @@ async function queryShopRooms(shopId) {
       }).length;
       rooms += roomCount;
     });
-    console.log(`[包间数] shopId=${shopId}: ${rooms}间`, areaList.length + '个区域');
+    console.log(`[包间数] shopId=${shopId}: ${rooms}间 / ${areaList.length}个区域`);
   } catch (e) {
     console.warn(`[包间数查询失败] shopId=${shopId}`, e.message);
   }
@@ -1587,14 +1591,16 @@ function renderOccupancyTable(result, settleDate) {
   const shops = result.shops;
 
   // 过滤：只显示有包间的门店（rooms 从 API 返回的包间数判断）
+  // 临时放宽：rooms=0 的也显示，方便诊断（已用红色标注）
   let filteredShops = ALL_SHOPS.filter(s => {
     const d = shops[s.centerId];
     const rooms = d?.rooms || 0;
-    if (rooms === 0) return false;
+    // if (rooms === 0) return false; // 临时注释掉，显示所有门店用于诊断
     if (STATE.region && s.region !== STATE.region) return false;
     if (STATE.shop && s.name !== STATE.shop) return false;
     return true;
   });
+  console.log('[出租率] 各门店包间数:', Object.entries(shops).map(([k,v]) => `shopId=${k} rooms=${v.rooms}`).join(', '));
 
   // 汇总全局
   let totalRooms = 0, totalNoon = 0, totalEvening = 0;
@@ -1677,10 +1683,12 @@ function renderOccupancyTable(result, settleDate) {
         return `<td class="c-pct2 ${cls}">${fmtPct(v)}</td>`;
       };
 
+      const isZero = rooms === 0;
       const tr = document.createElement('tr');
+      if (isZero) tr.style.background = '#fff3cd';
       tr.innerHTML = `
-        <td class="c-name" style="padding-left:24px">${s.name}</td>
-        <td style="text-align:center">${rooms}</td>
+        <td class="c-name" style="padding-left:24px">${s.name}${isZero ? ' ⚠️' : ''}</td>
+        <td style="text-align:center;font-weight:${isZero?'bold':''};color:${isZero?'#c0392b':'inherit'}">${rooms}</td>
         <td class="c-pct2">${d.noon}</td>
         ${pctCell(nPct)}
         <td class="c-pct2">${d.evening}</td>
