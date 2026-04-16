@@ -1793,7 +1793,7 @@ window.debugOccupancy = async function() {
     // 测试 queryShopRooms 和 queryBookOrders（与主代码相同）
     msg += '\n\n=== queryShopRooms 测试（调用主代码）===\n';
     const shopRoomCount = await window.queryShopRoomsTest ? window.queryShopRoomsTest() : (async () => {
-      const qs = `centerId=${corpCenterId}&shopId=247415&pageNo=1&pageSize=200`;
+      const qs = `centerId=${API_CONFIG.centerId}&shopId=247415&pageNo=1&pageSize=200`;
       const r = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getServiceArea?${qs}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' }
