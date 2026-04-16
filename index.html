@@ -643,13 +643,13 @@ const OCCUPY_CACHE = {}; // 出租率缓存
 
 // 查询单门店包间数（getServiceArea）
 // 结构：areaList[i].pointList[j] — 客位类型在 pointList 的 typeName 字段中
-// 注意：此接口只传 centerId，不传 shopId
-async function queryShopRooms(centerId) {
-  const cacheKey = `rooms_${centerId}`;
+// centerId = 集团总部ID(247412)，shopId = 门店自身的centerId
+async function queryShopRooms(shopId) {
+  const cacheKey = `rooms_${shopId}`;
   if (OCCUPY_CACHE[cacheKey] !== undefined) return OCCUPY_CACHE[cacheKey];
   let rooms = 0;
   try {
-    const qs = `centerId=${centerId}&pageNo=1&pageSize=200`;
+    const qs = `centerId=${API_CONFIG.centerId}&shopId=${shopId}&pageNo=1&pageSize=200`;
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), 12000);
     const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getServiceArea?${qs}`, {
@@ -671,9 +671,9 @@ async function queryShopRooms(centerId) {
       }).length;
       rooms += roomCount;
     });
-    console.log(`[包间数] centerId=${centerId}: ${rooms}间`, areaList.length + '个区域');
+    console.log(`[包间数] shopId=${shopId}: ${rooms}间`, areaList.length + '个区域');
   } catch (e) {
-    console.warn(`[包间数查询失败] centerId=${centerId}`, e.message);
+    console.warn(`[包间数查询失败] shopId=${shopId}`, e.message);
   }
   OCCUPY_CACHE[cacheKey] = rooms;
   return rooms;
@@ -1757,9 +1757,10 @@ window.debugOccupancy = async function() {
     const token = localStorage.getItem('wdtoken') || '';
     const corpCenterId = API_CONFIG.centerId; // 247412
 
-    // 测试1: getServiceArea（与 getBusinessSituation 完全相同的调用方式：Query String + 无 body）
-    let msg = '=== getServiceArea ===\n';
-    const qs1 = `centerId=${corpCenterId}&pageNo=1&pageSize=50`;
+    // 测试1: getServiceArea（centerId=集团总部ID, shopId=门店centerId）
+    const testShopId = 247413; // 朝阳店 centerId
+    let msg = '=== getServiceArea (朝阳店 shopId=247413) ===\n';
+    const qs1 = `centerId=${corpCenterId}&shopId=${testShopId}&pageNo=1&pageSize=50`;
     const r1 = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getServiceArea?${qs1}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' }
