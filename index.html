@@ -549,7 +549,7 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
     `;
   }
   
-  SHOP_DATA_CACHE[cacheKey] = { beginDate, endDate, centerId, shopId: queryId, income, raw: json };
+  SHOP_DATA_CACHE[cacheKey] = { settleDate, dateType, centerId, shopId: queryId, income, raw: json };
   return SHOP_DATA_CACHE[cacheKey];
 }
 
