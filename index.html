@@ -549,22 +549,22 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
     `;
   }
   
-  SHOP_DATA_CACHE[cacheKey] = { settleDate, dateType, centerId, shopId: queryId, income, raw: json };
+  SHOP_DATA_CACHE[cacheKey] = { beginDate, endDate, centerId, shopId: queryId, income, raw: json };
   return SHOP_DATA_CACHE[cacheKey];
 }
 
 // ══════════════════════════════════════════════════════════
 // 月度纯收汇总 API
-// 使用 getBusinessSituation（月维度 dateType=2），与日数据相同 API
-// 纯收字段：income.incomeTotal（与文档口径完全一致）
-// 每门店只需1次请求，不再逐天分页，彻底解决历史年份超时问题
+// 使用 getBusinessSituation（beginDate/endDate 区间查询整月）
+// 纯收字段：income.incomeTotal
+// 每门店只需1次请求，不再逐天分页
 // ══════════════════════════════════════════════════════════
 //
 // 查询指定月份所有门店的纯收汇总
 // 返回: { totalIncome, shops: { shopId: { name, income } } }
-// ── 使用 getBusinessSituation（月维度 dateType=2）查询整月纯收 ──
-// 与日数据相同 API、相同字段（income.incomeTotal），数据口径完全一致
-// 每门店只需1次请求，彻底避免逐天 getserialdata 数千次请求超时问题
+// ── 使用 getBusinessSituation beginDate/endDate 查询整月纯收 ──
+// 与日数据相同 API、相同字段（income.incomeTotal）
+// settleDate+dateType=单日数据，需用 beginDate/endDate 查整月
 async function queryMonthBillList(year, month, centerId, shopId) {
   const cacheKey = `bill_${centerId}_${shopId}_${year}_${month}`;
   if (SHOP_DATA_CACHE[cacheKey] !== undefined) {
@@ -572,8 +572,10 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   }
 
   const monthStr = `${year}-${p(month)}`;
-  const settleDate = `${year}-${p(month)}-01`;  // 月维度只需传月份首日
-  const dateType = 2;  // 月维度
+  // 月份最后一天
+  const lastDay = new Date(year, month, 0).getDate();
+  const beginDate = `${monthStr}-01 00:00:00`;
+  const endDate = `${monthStr}-${p(lastDay)} 23:59:59`;
 
   const sid = String(shopId);
   const shopInfo = ALL_SHOPS.find(s => String(s.centerId) === sid);
@@ -581,7 +583,7 @@ async function queryMonthBillList(year, month, centerId, shopId) {
 
   let income = 0;
   try {
-    const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${settleDate}&dateType=${dateType}`;
+    const qs = `centerId=${centerId}&shopId=${shopId}&beginDate=${encodeURIComponent(beginDate)}&endDate=${encodeURIComponent(endDate)}`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
     let json;
