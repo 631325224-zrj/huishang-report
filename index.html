@@ -2458,6 +2458,8 @@ window.debugCompare = async function(date = '2026-02-01', shopId = '247413') {
 };
 
 window.addEventListener('DOMContentLoaded', async () => {
+  // 强制清除旧缓存（确保 beginDate/endDate 区间查询生效）
+  localStorage.clear();
   try {
     DATA = await loadAllData();
     document.getElementById('loading-mask').style.display = 'none';
