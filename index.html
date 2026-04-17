@@ -606,14 +606,13 @@ async function queryMonthBillList(year, month, centerId, shopId) {
       } else if (bd.last !== undefined) {
         income = parseFloat(bd.last) || 0;
       }
-      // 诊断：打印 getBusinessSituation 返回的完整字段
-      const allIncomeKeys = Object.keys(incomeObj || {});
-      const allBdKeys = Object.keys(bd);
-      if (shopId === '247413' && year === 2026 && month === 4) {
-        console.log(`[月度诊断 朝阳店 2026-04] incomeObj:`, incomeObj);
-        console.log(`[月度诊断 朝阳店 2026-04] businessData:`, bd);
-        console.log(`[月度诊断 朝阳店 2026-04] incomeObj keys: ${allIncomeKeys.join(',')}, bd keys: ${allBdKeys.join(',')}`);
-        console.log(`[月度诊断 朝阳店 2026-04] 取值 income=${income}, bd.last=${bd.last}`);
+      // 诊断：每门店每月只打印一次
+      const diagKey = `diag_done_${sid}_${year}_${month}`;
+      if (!window[diagKey]) {
+        window[diagKey] = true;
+        console.log(`[月度诊断 ${shopNameResolved} ${year}-${month}] incomeObj:`, incomeObj);
+        console.log(`[月度诊断 ${shopNameResolved} ${year}-${month}] businessData:`, bd);
+        console.log(`[月度诊断 ${shopNameResolved} ${year}-${month}] 取income=${income}`);
       }
     }
   } catch (e) {
