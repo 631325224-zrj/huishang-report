@@ -606,6 +606,15 @@ async function queryMonthBillList(year, month, centerId, shopId) {
       } else if (bd.last !== undefined) {
         income = parseFloat(bd.last) || 0;
       }
+      // 诊断：打印 getBusinessSituation 返回的完整字段
+      const allIncomeKeys = Object.keys(incomeObj || {});
+      const allBdKeys = Object.keys(bd);
+      if (shopId === '247413' && year === 2026 && month === 4) {
+        console.log(`[月度诊断 朝阳店 2026-04] incomeObj:`, incomeObj);
+        console.log(`[月度诊断 朝阳店 2026-04] businessData:`, bd);
+        console.log(`[月度诊断 朝阳店 2026-04] incomeObj keys: ${allIncomeKeys.join(',')}, bd keys: ${allBdKeys.join(',')}`);
+        console.log(`[月度诊断 朝阳店 2026-04] 取值 income=${income}, bd.last=${bd.last}`);
+      }
     }
   } catch (e) {
     console.warn(`[月度汇总 异常] ${monthStr} 门店${shopId}:`, e.message);
