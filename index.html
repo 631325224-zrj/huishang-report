@@ -565,6 +565,35 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
 // ── 使用 getBusinessSituation beginDate/endDate 查询整月纯收 ──
 // 与日数据相同 API、相同字段（income.incomeTotal）
 // settleDate+dateType=单日数据，需用 beginDate/endDate 查整月
+// 查询单日纯收（带缓存），供逐日累加使用
+async function queryOneDayIncome(settleDate, centerId, shopId) {
+  const cacheKey = `day_${centerId}_${shopId}_${settleDate}`;
+  if (SHOP_DATA_CACHE[cacheKey] !== undefined) return SHOP_DATA_CACHE[cacheKey];
+  const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${settleDate}&dateType=1`;
+  let income = 0;
+  try {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
+      signal: controller.signal,
+    });
+    clearTimeout(tid);
+    const json = await res.json();
+    const incomeObj = json?.data?.List?.income;
+    const bd = json?.data?.List?.businessData ?? {};
+    if (incomeObj?.incomeTotal !== undefined) income = parseFloat(incomeObj.incomeTotal) || 0;
+    else if (bd.last !== undefined) income = parseFloat(bd.last) || 0;
+  } catch (e) {
+    // 超时或失败：该日记为 0，不影响整月累计
+  }
+  SHOP_DATA_CACHE[cacheKey] = income;
+  return income;
+}
+
+// ── 月度纯收：逐日累加（dateType=1，每天一次请求）──
+// 此方法比 beginDate/endDate 稳定，历史月份全部有效
 async function queryMonthBillList(year, month, centerId, shopId) {
   const cacheKey = `bill_${centerId}_${shopId}_${year}_${month}`;
   if (SHOP_DATA_CACHE[cacheKey] !== undefined) {
@@ -572,51 +601,28 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   }
 
   const monthStr = `${year}-${p(month)}`;
-  // 月份最后一天
   const lastDay = new Date(year, month, 0).getDate();
-  const beginDate = `${monthStr}-01 00:00:00`;
-  const endDate = `${monthStr}-${p(lastDay)} 23:59:59`;
-
   const sid = String(shopId);
   const shopInfo = ALL_SHOPS.find(s => String(s.centerId) === sid);
   const shopNameResolved = shopInfo?.name || `门店${sid}`;
 
+  // 生成该月所有日期
+  const dates = [];
+  for (let d = 1; d <= lastDay; d++) {
+    dates.push(`${monthStr}-${p(d)}`);
+  }
+
+  // 并发查每天（并发15，每月31天约2批次）
   let income = 0;
   try {
-    const qs = `centerId=${centerId}&shopId=${shopId}&beginDate=${encodeURIComponent(beginDate)}&endDate=${encodeURIComponent(endDate)}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-    let json;
-    try {
-      const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      json = await res.json();
-    } catch (e) {
-      clearTimeout(timeoutId);
-      console.warn(`[月度汇总 查询失败] ${monthStr} 门店${shopId}:`, e.message);
+    const dayTasks = dates.map(date => () => queryOneDayIncome(date, centerId, shopId));
+    const dayResults = [];
+    for (let i = 0; i < dayTasks.length; i += 15) {
+      const batch = dayTasks.slice(i, i + 15);
+      const r = await Promise.all(batch.map(t => t()));
+      dayResults.push(...r);
     }
-
-    if (json) {
-      const incomeObj = json?.data?.List?.income;
-      const bd = json?.data?.List?.businessData ?? {};
-      if (incomeObj?.incomeTotal !== undefined) {
-        income = parseFloat(incomeObj.incomeTotal) || 0;
-      } else if (bd.last !== undefined) {
-        income = parseFloat(bd.last) || 0;
-      }
-      // 诊断：每门店每月只打印一次
-      const diagKey = `diag_done_${sid}_${year}_${month}`;
-      if (!window[diagKey]) {
-        window[diagKey] = true;
-        console.log(`[月度诊断 ${shopNameResolved} ${year}-${month}] incomeObj:`, incomeObj);
-        console.log(`[月度诊断 ${shopNameResolved} ${year}-${month}] businessData:`, bd);
-        console.log(`[月度诊断 ${shopNameResolved} ${year}-${month}] 取income=${income}`);
-      }
-    }
+    income = dayResults.reduce((s, v) => s + (v || 0), 0);
   } catch (e) {
     console.warn(`[月度汇总 异常] ${monthStr} 门店${shopId}:`, e.message);
   }
