@@ -592,8 +592,7 @@ async function queryOneDayIncome(settleDate, centerId, shopId) {
   return income;
 }
 
-// ── 月度纯收：逐日累加（dateType=1，每天一次请求）──
-// 此方法比 beginDate/endDate 稳定，历史月份全部有效
+// ── 月度纯收：优先用 beginDate/endDate 单次请求，失败则降级逐日累加 ──
 async function queryMonthBillList(year, month, centerId, shopId) {
   const cacheKey = `bill_${centerId}_${shopId}_${year}_${month}`;
   if (SHOP_DATA_CACHE[cacheKey] !== undefined) {
@@ -606,25 +605,50 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   const shopInfo = ALL_SHOPS.find(s => String(s.centerId) === sid);
   const shopNameResolved = shopInfo?.name || `门店${sid}`;
 
-  // 生成该月所有日期
-  const dates = [];
-  for (let d = 1; d <= lastDay; d++) {
-    dates.push(`${monthStr}-${p(d)}`);
+  let income = 0;
+
+  // 方案A：beginDate/endDate 单次请求（快，约 1 秒/门店）
+  try {
+    const beginDate = `${monthStr}-01 00:00:00`;
+    const endDate = `${monthStr}-${p(lastDay)} 23:59:59`;
+    const qs = `centerId=${centerId}&shopId=${shopId}&beginDate=${encodeURIComponent(beginDate)}&endDate=${encodeURIComponent(endDate)}`;
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 12000);
+    const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
+      signal: controller.signal,
+    });
+    clearTimeout(tid);
+    const json = await res.json();
+    const incomeObj = json?.data?.List?.income;
+    const bd = json?.data?.List?.businessData ?? {};
+    if (incomeObj?.incomeTotal !== undefined) {
+      income = parseFloat(incomeObj.incomeTotal) || 0;
+    } else if (bd.last !== undefined) {
+      income = parseFloat(bd.last) || 0;
+    }
+    // incomeTotal 有值（即使是 0 也算正常），直接用
+    if (incomeObj?.incomeTotal !== undefined) {
+      const shops = { [sid]: { name: shopNameResolved, income } };
+      const result = { totalIncome: income, shops, monthStr };
+      SHOP_DATA_CACHE[cacheKey] = result;
+      console.log(`[月度汇总] ${monthStr} ${shopNameResolved}: 纯收=${income.toFixed(2)}`);
+      return result;
+    }
+  } catch (e) {
+    console.warn(`[月度汇总 A方案失败] ${monthStr} 门店${shopId}:`, e.message);
   }
 
-  // 并发查每天（并发15，每月31天约2批次）
-  let income = 0;
+  // 方案B：降级逐日累加（慢，约 2 秒/门店，历史月份保底）
+  console.warn(`[月度汇总 降级逐日] ${monthStr} 门店${shopId}`);
   try {
-    const dayTasks = dates.map(date => () => queryOneDayIncome(date, centerId, shopId));
-    const dayResults = [];
-    for (let i = 0; i < dayTasks.length; i += 15) {
-      const batch = dayTasks.slice(i, i + 15);
-      const r = await Promise.all(batch.map(t => t()));
-      dayResults.push(...r);
-    }
+    const dates = [];
+    for (let d = 1; d <= lastDay; d++) dates.push(`${monthStr}-${p(d)}`);
+    const dayResults = await Promise.all(dates.map(date => queryOneDayIncome(date, centerId, shopId)));
     income = dayResults.reduce((s, v) => s + (v || 0), 0);
   } catch (e) {
-    console.warn(`[月度汇总 异常] ${monthStr} 门店${shopId}:`, e.message);
+    console.warn(`[月度汇总 B方案失败] ${monthStr} 门店${shopId}:`, e.message);
   }
 
   const shops = { [sid]: { name: shopNameResolved, income } };
