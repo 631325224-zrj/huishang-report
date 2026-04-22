@@ -576,6 +576,13 @@ async function queryMonthBillList(year, month, centerId, shopId) {
     const json = await res.json();
     const incomeObj = json?.data?.List?.income;
     const bd = json?.data?.List?.businessData ?? {};
+    // 诊断：只对朝阳门店第一次查询打印原始数据
+    if (!window._monthDiagDone && String(shopId) === '247413') {
+      window._monthDiagDone = true;
+      console.log(`[月度API诊断] ${monthStr} 朝阳门店 qs=${`centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=2`}`);
+      console.log(`[月度API诊断] incomeTotal=${incomeObj?.incomeTotal} | bd.last=${bd.last} | bd.orig=${bd.orig}`);
+      console.log(`[月度API诊断] 完整List:`, JSON.stringify(json?.data?.List).slice(0, 500));
+    }
     if (incomeObj?.incomeTotal !== undefined) {
       income = parseFloat(incomeObj.incomeTotal) || 0;
     } else if (bd.last !== undefined) {
