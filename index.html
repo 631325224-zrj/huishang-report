@@ -601,11 +601,18 @@ async function queryMonthBillList(year, month, centerId, shopId) {
     const v3 = await diag('GS serial d1', 'getserialdata?centerId=247412&shopId=247413&settleDate=' + beginDate + '&dateType=1&pageNo=1&pageSize=500',
       j => {
         const list = j?.data?.billList || [];
-        // 纯收 = last_total(实收) - not_income_money(非收入金额)
+        console.log(`[GS诊断 billList] 条数=${list.length}`, list[0] ? {date: list[0].date, last_total: list[0].last_total, not_income: list[0].not_income_money} : '空');
+        return list.reduce((s, b) => s + (parseFloat(b.last_total) || 0) - (parseFloat(b.not_income_money) || 0), 0);
+      });
+    // 测试 GS 月维度单次查询（用月初dateType=3查整月）
+    const v4 = await diag('GS serial d3+月', 'getserialdata?centerId=247412&shopId=247413&settleDate=' + beginDate + '&dateType=3&pageNo=1&pageSize=2000',
+      j => {
+        const list = j?.data?.billList || [];
+        console.log(`[GS月维度 billList] 条数=${list.length}`);
         return list.reduce((s, b) => s + (parseFloat(b.last_total) || 0) - (parseFloat(b.not_income_money) || 0), 0);
       });
 
-    const best = [v1, v2, v3].filter(x => x !== null && x !== undefined).sort((a, b) => b - a)[0] || 0;
+    const best = [v1, v2, v3, v4].filter(x => x !== null && x !== undefined).sort((a, b) => b - a)[0] || 0;
     income = best;
   } else {
     // 2026年或非诊断门店：直接用 settleDate+dateType=3
