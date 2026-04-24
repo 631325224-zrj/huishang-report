@@ -549,8 +549,8 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
 // ── 使用 getBusinessSituation beginDate/endDate 查询整月纯收 ──
 // 与日数据相同 API、相同字段（income.incomeTotal）
 // settleDate+dateType=单日数据，需用 beginDate/endDate 查整月
-// ── 月度纯收：使用 settleDate（月第一天）+ dateType=2（月维度），1次请求/门店 ──
-// 与 MEMORY.md 记录的方案一致：dateType=2 月维度查询，直接返回整月 incomeTotal
+// ── 月度纯收：使用 settleDate（月第一天）+ dateType=3（月维度），1次请求/门店 ──
+// dateType: 1=日, 2=周, 3=月 ← 之前误用了 dateType=2(周)，已修正为 dateType=3
 async function queryMonthBillList(year, month, centerId, shopId) {
   const cacheKey = `bill_${centerId}_${shopId}_${year}_${month}`;
   if (SHOP_DATA_CACHE[cacheKey] !== undefined) {
@@ -564,7 +564,7 @@ async function queryMonthBillList(year, month, centerId, shopId) {
 
   let income = 0;
   try {
-    const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=2`;
+    const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=3`;
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), 12000);
     const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
@@ -579,7 +579,7 @@ async function queryMonthBillList(year, month, centerId, shopId) {
     // 诊断：只对朝阳门店第一次查询打印原始数据
     if (!window._monthDiagDone && String(shopId) === '247413') {
       window._monthDiagDone = true;
-      console.log(`[月度API诊断] ${monthStr} 朝阳门店 qs=${`centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=2`}`);
+      console.log(`[月度API诊断] ${monthStr} 朝阳门店 qs=${`centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=3`}`);
       console.log(`[月度API诊断] incomeTotal=${incomeObj?.incomeTotal} | bd.last=${bd.last} | bd.orig=${bd.orig}`);
       console.log(`[月度API诊断] 完整List:`, JSON.stringify(json?.data?.List).slice(0, 500));
     }
