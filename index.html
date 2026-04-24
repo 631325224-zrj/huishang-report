@@ -608,10 +608,11 @@ async function queryMonthBillList(year, month, centerId, shopId) {
     const v4 = await diag('GS serial d3+月', 'getserialdata?centerId=247412&shopId=247413&settleDate=' + beginDate + '&dateType=3&pageNo=1&pageSize=2000',
       j => {
         const list = j?.data?.billList || [];
-        console.log(`[GS月维度 billList] 条数=${list.length}`);
+        console.log(`【GS月维度】billList条数=${list.length} | 首条date=${list[0]?.date} | 末条date=${list[list.length-1]?.date}`);
         return list.reduce((s, b) => s + (parseFloat(b.last_total) || 0) - (parseFloat(b.not_income_money) || 0), 0);
       });
 
+    console.log(`★[诊断汇总 ${monthStr}] GB-d3=${v1} | GB-bd/ed=${v2} | GS-d1=${v3} | GS-d3=${v4} ← 最大=${best}`);
     const best = [v1, v2, v3, v4].filter(x => x !== null && x !== undefined).sort((a, b) => b - a)[0] || 0;
     income = best;
   } else {
