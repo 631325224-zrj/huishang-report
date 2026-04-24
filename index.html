@@ -551,6 +551,20 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
 // settleDate+dateType=单日数据，需用 beginDate/endDate 查整月
 // ── 月度纯收：使用 settleDate（月第一天）+ dateType=3（月维度），1次请求/门店 ──
 // dateType: 1=日, 2=周, 3=月 ← 之前误用了 dateType=2(周)，已修正为 dateType=3
+// 辅助函数
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+async function fetchWithTimeout(url, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), timeoutMs);
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
+    signal: controller.signal,
+  });
+  clearTimeout(tid);
+  return res;
+}
+
 async function queryMonthBillList(year, month, centerId, shopId) {
   const cacheKey = `bill_${centerId}_${shopId}_${year}_${month}`;
   if (SHOP_DATA_CACHE[cacheKey] !== undefined) {
@@ -564,60 +578,37 @@ async function queryMonthBillList(year, month, centerId, shopId) {
 
   const curYear = new Date().getFullYear();
   const isHistorical = year < curYear;
-  const isDiagShop = String(shopId) === '247413'; // 朝阳门店用于诊断
 
   let income = 0;
+  try {
+    if (isHistorical) {
+      // 历史年：逐天查询 getserialdata dateType=1，累加 last_total - not_income_money
+      const lastDay = new Date(year, month, 0).getDate();
+      const days = Array.from({ length: lastDay }, (_, i) => i + 1);
 
-  // ── 2025年：对比 getBusinessSituation(3种参数) vs getserialdata ──
-  if (isHistorical && isDiagShop) {
-    const beginDate = `${monthStr}-01`;
-    const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
+      // 分批：每批 N 天，间隔 delay ms
+      const BATCH_SIZE = 5;
+      const BATCH_DELAY = 800;
 
-    const diag = async (label, qs, extractIncome) => {
-      try {
-        const controller = new AbortController();
-        const tid = setTimeout(() => controller.abort(), 10000);
-        const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/${qs}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
-          signal: controller.signal,
+      for (let b = 0; b < days.length; b += BATCH_SIZE) {
+        const batch = days.slice(b, b + BATCH_SIZE);
+        const promises = batch.map(d => {
+          const day = String(d).padStart(2, '0');
+          const date = `${monthStr}-${day}`;
+          return fetchWithTimeout(
+            `${API_CONFIG.baseUrl}/datatransfer/getserialdata?centerId=${centerId}&shopId=${shopId}&settleDate=${date}&dateType=1&pageNo=1&pageSize=500`,
+            15000
+          ).then(async res => {
+            const j = await res.json();
+            const list = j?.data?.billList || [];
+            return list.reduce((s, b) => s + (parseFloat(b.last_total) || 0) - (parseFloat(b.not_income_money) || 0), 0);
+          }).catch(() => 0);
         });
-        clearTimeout(tid);
-        const json = await res.json();
-        const val = extractIncome(json);
-        console.log(`[对比诊断 ${monthStr}] ${label}: income=${val ?? '无数据'}`);
-        return val;
-      } catch (e) {
-        console.log(`[对比诊断 ${monthStr}] ${label}: 失败 - ${e.message}`);
-        return null;
+        income += (await Promise.all(promises)).reduce((a, b) => a + b, 0);
+        if (b + BATCH_SIZE < days.length) await sleep(BATCH_DELAY);
       }
-    };
-
-    const v1 = await diag('GB-d3 settleDate', 'getBusinessSituation?centerId=247412&shopId=247413&settleDate=' + beginDate + '&dateType=3',
-      j => j?.data?.List?.income?.incomeTotal);
-    const v2 = await diag('GB-bd/ed d1', 'getBusinessSituation?centerId=247412&shopId=247413&beginDate=' + beginDate + '&endDate=' + endDate + '&dateType=1',
-      j => j?.data?.List?.income?.incomeTotal);
-    const v3 = await diag('GS serial d1', 'getserialdata?centerId=247412&shopId=247413&settleDate=' + beginDate + '&dateType=1&pageNo=1&pageSize=500',
-      j => {
-        const list = j?.data?.billList || [];
-        console.log(`[GS诊断 billList] 条数=${list.length}`, list[0] ? {date: list[0].date, last_total: list[0].last_total, not_income: list[0].not_income_money} : '空');
-        return list.reduce((s, b) => s + (parseFloat(b.last_total) || 0) - (parseFloat(b.not_income_money) || 0), 0);
-      });
-    // 测试 GS 月维度单次查询（用月初dateType=3查整月）
-    const v4 = await diag('GS serial d3+月', 'getserialdata?centerId=247412&shopId=247413&settleDate=' + beginDate + '&dateType=3&pageNo=1&pageSize=2000',
-      j => {
-        const list = j?.data?.billList || [];
-        console.log(`【GS月维度】billList条数=${list.length} | 首条date=${list[0]?.date} | 末条date=${list[list.length-1]?.date}`);
-        return list.reduce((s, b) => s + (parseFloat(b.last_total) || 0) - (parseFloat(b.not_income_money) || 0), 0);
-      });
-
-    console.log(`★[诊断汇总 ${monthStr}] GB-d3=${v1} | GB-bd/ed=${v2} | GS-d1=${v3} | GS-d3=${v4} ← 最大=${best}`);
-    const best = [v1, v2, v3, v4].filter(x => x !== null && x !== undefined).sort((a, b) => b - a)[0] || 0;
-    income = best;
-  } else {
-    // 2026年或非诊断门店：直接用 settleDate+dateType=3
-    try {
+    } else {
+      // 当年：用 settleDate+dateType=3（月维度，单次请求）
       const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=3`;
       const controller = new AbortController();
       const tid = setTimeout(() => controller.abort(), 12000);
@@ -635,9 +626,9 @@ async function queryMonthBillList(year, month, centerId, shopId) {
       } else if (bd.last !== undefined) {
         income = parseFloat(bd.last) || 0;
       }
-    } catch (e) {
-      console.warn(`[月度汇总 失败] ${monthStr} 门店${shopId}:`, e.message);
     }
+  } catch (e) {
+    console.warn(`[月度汇总 失败] ${monthStr} 门店${shopId}:`, e.message);
   }
 
   const shops = { [sid]: { name: shopNameResolved, income } };
