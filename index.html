@@ -601,7 +601,8 @@ async function queryMonthBillList(year, month, centerId, shopId) {
     const v3 = await diag('GS serial d1', 'getserialdata?centerId=247412&shopId=247413&settleDate=' + beginDate + '&dateType=1&pageNo=1&pageSize=500',
       j => {
         const list = j?.data?.billList || [];
-        return list.reduce((s, b) => s + (parseFloat(b.income) || 0) - (parseFloat(b.not_income_money) || 0), 0);
+        // 纯收 = last_total(实收) - not_income_money(非收入金额)
+        return list.reduce((s, b) => s + (parseFloat(b.last_total) || 0) - (parseFloat(b.not_income_money) || 0), 0);
       });
 
     const best = [v1, v2, v3].filter(x => x !== null && x !== undefined).sort((a, b) => b - a)[0] || 0;
