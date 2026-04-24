@@ -562,9 +562,23 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   const shopInfo = ALL_SHOPS.find(s => String(s.centerId) === sid);
   const shopNameResolved = shopInfo?.name || `门店${sid}`;
 
+  // 历史月份用 beginDate/endDate 区间查询（dateType=3 对历史月只返回单日数据）
+  const curYear = new Date().getFullYear();
+  const isHistorical = year < curYear;
+
   let income = 0;
   try {
-    const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=3`;
+    let qs;
+    if (isHistorical) {
+      // 2025年：用 beginDate/endDate 查整月
+      const beginDate = `${monthStr}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
+      qs = `centerId=${centerId}&shopId=${shopId}&beginDate=${beginDate}&endDate=${endDate}&dateType=1`;
+    } else {
+      // 2026年：用 settleDate+dateType=3（月维度）
+      qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=3`;
+    }
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), 12000);
     const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
@@ -576,17 +590,16 @@ async function queryMonthBillList(year, month, centerId, shopId) {
     const json = await res.json();
     const incomeObj = json?.data?.List?.income;
     const bd = json?.data?.List?.businessData ?? {};
-    const isHistorical = year < new Date().getFullYear();
-    // 诊断：朝阳门店 2025 年历史月份打印完整原始返回（每次都打）
-    if (isHistorical && String(shopId) === '247413') {
-      console.log(`[历史月API诊断 ${monthStr}] qs=settleDate=${monthStr}-01&dateType=3`);
-      console.log(`[历史月API诊断 ${monthStr}] incomeTotal=${incomeObj?.incomeTotal} | bd.last=${bd.last} | bd.orig=${bd.orig}`);
-      console.log(`[历史月API诊断 ${monthStr}] 原始List:`, JSON.stringify(json?.data?.List).slice(0, 800));
-    }
+
     if (incomeObj?.incomeTotal !== undefined) {
       income = parseFloat(incomeObj.incomeTotal) || 0;
     } else if (bd.last !== undefined) {
       income = parseFloat(bd.last) || 0;
+    }
+
+    // 诊断：打印历史月份查询参数和返回值
+    if (isHistorical) {
+      console.log(`[历史月API ${monthStr}] qs=${qs} → incomeTotal=${incomeObj?.incomeTotal} | bd.last=${bd.last}`);
     }
   } catch (e) {
     console.warn(`[月度汇总 失败] ${monthStr} 门店${shopId}:`, e.message);
