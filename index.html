@@ -582,8 +582,9 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   let income = 0;
   try {
     if (isHistorical) {
-      // 历史年：逐天查询 getserialdata dateType=1，累加 last_total - not_income_money
-      // 批大小=8天，间隔300ms（实测不限流，加快速度）
+      // 历史年：逐天查询 getBusinessSituation dateType=1，取 income.incomeTotal
+      // （不能用 getserialdata，它对历史年份返回全门店汇总数据而非单店数据）
+      // 批大小=8天，间隔300ms（避免并发过高超时）
       const lastDay = new Date(year, month, 0).getDate();
       const days = Array.from({ length: lastDay }, (_, i) => i + 1);
       const BATCH_SIZE = 8;
@@ -594,14 +595,20 @@ async function queryMonthBillList(year, month, centerId, shopId) {
         const promises = batch.map(d => {
           const dayStr = String(d).padStart(2, '0');
           const dateStr = `${monthStr}-${dayStr}`;
-          return fetchWithTimeout(
-            `${API_CONFIG.baseUrl}/datatransfer/getserialdata?centerId=${centerId}&shopId=${shopId}&settleDate=${dateStr}&dateType=1&pageNo=1&pageSize=500`,
-            12000
-          ).then(async res => {
+          const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${dateStr}&dateType=1`;
+          const controller = new AbortController();
+          const tid = setTimeout(() => controller.abort(), 12000);
+          return fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
+            signal: controller.signal,
+          }).then(async res => {
+            clearTimeout(tid);
             const j = await res.json();
-            const list = j?.data?.billList || [];
-            return list.reduce((s, row) => s + (parseFloat(row.last_total) || 0) - (parseFloat(row.not_income_money) || 0), 0);
-          }).catch(() => 0);
+            // 纯收金额 = income.incomeTotal（与当年 month 维度口径一致）
+            const incomeObj = j?.data?.List?.income;
+            return incomeObj?.incomeTotal !== undefined ? parseFloat(incomeObj.incomeTotal) || 0 : 0;
+          }).catch(() => { clearTimeout(tid); return 0; });
         });
         income += (await Promise.all(promises)).reduce((a, v) => a + v, 0);
         if (b + BATCH_SIZE < days.length) await sleep(BATCH_DELAY);
