@@ -1083,6 +1083,10 @@ async function loadAllData() {
       if (shopDailyData[r.shopId]) shopDailyData[r.shopId][r.settleDate] = r.income;
     }
   });
+  // 立即同步到全局 DATA，render() 可读取日数据（渐进式更新 UI）
+  DATA.dailyData = dailyData;
+  DATA.shopDailyData = shopDailyData;
+  render();
 
   // ══════════════════════════════════════════════════════════
   // 第二阶段：加载当前月账单明细数据（28 次 API，分页获取）
@@ -1091,6 +1095,13 @@ async function loadAllData() {
   updateProgress(68, `加载当月账单明细…`);
   const monthTasks = shopIds.map(shopId => () => queryMonthBillList(curYear, curMonth, API_CONFIG.centerId, shopId));
   const monthResults = await batchQuery(monthTasks, 5, prog => updateProgress(68 + prog * 0.3, `当月账单 ${prog}%…`));
+
+  // 立即同步月度数据到全局 DATA（渐进式更新 UI）
+  DATA.monthlyData = monthlyData;
+  DATA.yearlyData = yearlyData;
+  DATA.shopMonthlyData = shopMonthlyData;
+  DATA.shopYearlyData = shopYearlyData;
+  render();
   
   // 清零并重新填入当前月（避免日维度累加误差）
   const oldCurMonth = monthlyData[curMonthKey] || 0;
@@ -2570,25 +2581,68 @@ window.debugCompare = async function(date = '2026-02-01', shopId = '247413') {
 };
 
 window.addEventListener('DOMContentLoaded', async () => {
-  try {
-    DATA = await loadAllData();
-    document.getElementById('loading-mask').style.display = 'none';
-    initSelectors();
-    render();
-  } catch (err) {
-    console.error('加载失败:', err);
-    document.getElementById('loading-title').textContent = '⚠️ 数据加载失败';
-    // 更健壮的错误信息提取
-    let errMsg = '请检查网络连接后刷新重试';
-    if (err) {
-      if (typeof err === 'string') errMsg = err;
-      else if (err.message) errMsg = err.message;
-      else if (err.name === 'AbortError') errMsg = '请求超时，请检查网络连接后刷新';
-      else if (err.type) errMsg = err.type; // 可能包含 'cors', 'network' 等
+  // ── 立即初始化 DATA 结构并渲染页面（不等待数据加载完毕）──
+  // 修复：缓存清空后全量加载历史数据耗时过长，先渲染 UI 让用户看到页面，
+  //       数据在后台逐步加载（loadAllData 内部各阶段完成后会自动 render）
+  const initDATA = () => {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+    const today = `${curYear}-${p(curMonth)}-${p(now.getDate())}`;
+    const curMonthKey = `${curYear}-${p(curMonth)}`;
+
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      days.push(`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`);
     }
-    document.getElementById('loading-status').textContent = errMsg;
-    document.getElementById('loading-progress-bar').style.background = '#e74c3c';
-  }
+
+    const months = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now);
+      d.setMonth(d.getMonth() - i);
+      const y = d.getFullYear(), m = d.getMonth() + 1;
+      if (y < API_CONFIG.onlineYear || (y === API_CONFIG.onlineYear && m < API_CONFIG.onlineMonth)) continue;
+      months.push({ key: `${y}-${p(m)}`, settleDate: `${y}-${p(m)}-01` });
+    }
+
+    const years = [];
+    for (let y = API_CONFIG.onlineYear; y <= curYear; y++) {
+      years.push({ key: String(y), settleDate: `${y}-01-01` });
+    }
+
+    const dailyData = {};
+    days.forEach(d => { dailyData[d] = 0; });
+    const shopDailyData = {};
+    ALL_SHOPS.forEach(s => { shopDailyData[s.centerId] = {}; days.forEach(d => { shopDailyData[s.centerId][d] = 0; }); });
+
+    return {
+      curYear, curMonth, today, curMonthKey,
+      dailyData, monthlyData: {}, yearlyData: {},
+      availableYears: years.map(y => parseInt(y.key)).sort((a, b) => a - b),
+      availableMonths: months.map(m => m.key),
+      dailyDates: days,
+      allShops: ALL_SHOPS,
+      shopDailyData, shopMonthlyData: {}, shopYearlyData: {},
+      summary: { today: 0, currentMonth: 0, currentYear: 0 },
+    };
+  };
+
+  DATA = initDATA();
+  document.getElementById('loading-mask').style.display = 'none';
+  initSelectors();
+  render(); // 立即渲染，用户能看到页面框架
+
+  // 后台加载完整数据（不阻塞 UI，loadAllData 内部各阶段完成后会逐步 render）
+  loadAllData().catch(err => {
+    console.error('后台数据加载异常:', err);
+    const notice = document.getElementById('notice-bar');
+    if (notice) {
+      notice.textContent = '⚠️ 部分数据加载失败，请检查网络后刷新重试';
+      notice.classList.add('visible');
+    }
+  });
 });
 </script>
 </body>
