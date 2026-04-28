@@ -1166,6 +1166,13 @@ async function loadAllData() {
               shopMonthlyData[n][pk] = (shopMonthlyData[n][pk] || 0) + shopData.income;
               shopYearlyData[n][prevYKey] = (shopYearlyData[n][prevYKey] || 0) + shopData.income;
               shopTmp[n] = (shopTmp[n] || 0) + shopData.income;
+              // ✅ 同时写入全局 DATA（供 UI 实时读取，否则预加载数据永远无法渲染到年报视图）
+              DATA.monthlyData[pk] = (DATA.monthlyData[pk] || 0) + shopData.income;
+              DATA.yearlyData[prevYKey] = (DATA.yearlyData[prevYKey] || 0) + shopData.income;
+              if (!DATA.shopMonthlyData[n]) DATA.shopMonthlyData[n] = {};
+              if (!DATA.shopYearlyData[n]) DATA.shopYearlyData[n] = {};
+              DATA.shopMonthlyData[n][pk] = (DATA.shopMonthlyData[n][pk] || 0) + shopData.income;
+              DATA.shopYearlyData[n][prevYKey] = (DATA.shopYearlyData[n][prevYKey] || 0) + shopData.income;
             }
           });
         }
@@ -1174,6 +1181,8 @@ async function loadAllData() {
         lsSaveMonth(pk, monthlyData[pk], shopTmp);
         loadedMonths.add(pk);
         lsSaveMeta();
+        // ✅ 预加载月份写入全局 DATA 后立即触发增量渲染，年报数据渐进式呈现
+        render();
       }
       console.log(`[预加载 ${pk}] 完成: ${Object.keys(shopTmp).length} 门店`);
     } catch (e) {
@@ -2161,21 +2170,28 @@ function renderCharts(dim) {
 
 // ════════ 渲染表格 ════════
 function renderTable(shops, dim, loading) {
-  // 如果当前 DOM 的表头已经是年份模式，禁止被旧状态（day/month）的调用覆盖
-  // 原理：第1次用 dim=year 调用时设置年份表头；第2次用 dim=day 调用时跳过设置表头
-  // resetSort() / sortTable() 会触发 render()，此时 STATE 可能仍是 year，dim 却是 day
   const currentThA = document.getElementById('th-a')?.textContent || '';
   const isYearMode = dim === 'year';
+  // 防止月报/日报的 render 覆盖年报模式的表头（年报 render 先执行，月报 DOMContentLoaded 后执行）
+  const isAlreadyYear = currentThA.includes('年') && !currentThA.includes('-') && dim !== 'year';
+  if (isAlreadyYear && dim !== 'year') {
+    dim = 'year'; // 强制保持年报模式，不被其他 render 覆盖
+  }
 
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
 
-  // 加载中时显示提示行，不阻塞用户操作
+  // 加载中时只显示一行提示，表头正常设置（用户需要看到正确的表头才能理解提示含义）
   if (loading) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:#999">
-      <div style="font-size:14px">📡 正在加载年报数据，请稍候…</div>
-      <div style="font-size:12px;margin-top:8px">加载期间您可以浏览已就绪的数据</div>
-    </td></tr>`;
+    const labelA = `${STATE.yearOnly}年`, labelB = `${STATE.yearPrev}年`;
+    document.getElementById('th-a').textContent = labelA;
+    document.getElementById('th-b').textContent = labelB;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="5" style="text-align:center;padding:12px 8px;color:#888;font-size:12px;border-bottom:1px solid #eee">
+      📡 正在后台加载数据，加载完成后自动更新…
+    </td>`;
+    tbody.appendChild(tr);
+    return; // 加载中只显示一行提示，不渲染空行
   }
 
   let labelA = '', labelB = '';
@@ -2188,7 +2204,6 @@ function renderTable(shops, dim, loading) {
   } else {
     labelA = `${STATE.yearOnly}年`; labelB = `${STATE.yearPrev}年`;
   }
-  console.log('[renderTable] dim snapshot=' + dim + ' → th-a=' + labelA + ' | th-b=' + labelB);
   document.getElementById('th-a').textContent = labelA;
   document.getElementById('th-b').textContent = labelB;
 
