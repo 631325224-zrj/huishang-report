@@ -2326,15 +2326,15 @@ async function render() {
   
   document.getElementById('table-meta').textContent = `共 ${shops.length} 家门店`;
 
-  renderSummary(dim);
-
   // 年报维度：如果数据尚未全部加载，先触发加载，等待完成后重新 render
   if (dim === 'year') {
     const stillLoading = ensureYearData(dim, () => render());
     if (stillLoading) return; // 数据未就绪，等加载完毕后 render() 会被自动调用
   }
 
-  renderTable(shops, dim);
+  // ⚠️ 直接用 STATE.dim，防止 year 模式下 renderSummary/renderTable 使用闭包捕获的旧 dim='day'
+  renderSummary(STATE.dim);
+  renderTable(shops, STATE.dim);
   renderCharts(dim);
 }
 
