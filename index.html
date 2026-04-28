@@ -806,6 +806,7 @@ function updateProgress(percent, text) {
 // ══════════════════════════════════════════════════════════
 const LS_MONTHLY = 'hs_monthly_cache';   // { 'YYYY-MM': { total, shops: { cid: amount } } }
 const LS_META    = 'hs_monthly_meta';     // { loadedMonths: ['2026-03', ...] }
+const LS_YEARLY  = 'hs_yearly_cache';     // { cid_year: amount, ... } e.g. { '247412_2025': 123456 }
 
 function lsGet(key, fallback = null) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
@@ -877,12 +878,40 @@ function lsLoadMonth(key) {
 
 function lsSaveMeta() {
   lsSet(LS_META, { loadedMonths: [...loadedMonths] });
+  lsSaveYearlyData(DATA.shopYearlyData); // ✅ 同步保存年度汇总，防止刷新丢失
+}
+
+function lsSaveYearlyData(shopYearlyData) {
+  // 保存门店年度汇总到 localStorage，格式：{ 'cid_year': amount }
+  const cache = {};
+  Object.entries(shopYearlyData).forEach(([cid, years]) => {
+    Object.entries(years).forEach(([y, amt]) => {
+      if (amt > 0) cache[`${cid}_${y}`] = amt;
+    });
+  });
+  lsSet(LS_YEARLY, cache);
+}
+
+function lsLoadYearlyData() {
+  // 从 localStorage 加载门店年度汇总，返回 { cid: { year: amount } }
+  const cache = lsGet(LS_YEARLY, {});
+  const result = {};
+  Object.entries(cache).forEach(([k, amt]) => {
+    const parts = k.split('_');
+    if (parts.length === 2) {
+      const cid = Number(parts[0]);
+      const y = parts[1];
+      if (!result[cid]) result[cid] = {};
+      result[cid][y] = amt;
+    }
+  });
+  return result;
 }
 
 // ══════════════════════════════════════════════════════════
 // 清理旧缓存（v7：月度 API 改用 getBusinessSituation，旧 getserialdata 缓存数据不兼容，强制重建）
 // ══════════════════════════════════════════════════════════
-const LS_CACHE_VERSION = 'v7';  // v6→v7：月度查询从 getserialdata 改为 getBusinessSituation，彻底解决历史年份数据超时为0问题，清除旧缓存重建
+const LS_CACHE_VERSION = 'v8';  // v7→v8：新增 shopYearlyData 本地存储，防止刷新后年报数据丢失，清除旧缓存重建
 
 function lsClearOldCache() {
   // 检查是否需要清理旧缓存
@@ -899,6 +928,7 @@ function lsClearOldCache() {
   localStorage.removeItem(LS_META);
   // 清理其他旧缓存
   localStorage.removeItem('hs_shop_data_cache');
+  localStorage.removeItem(LS_YEARLY); // 年度汇总数据也需重建
   
   // 设置新版本号
   lsSet('hs_cache_version', LS_CACHE_VERSION);
@@ -999,6 +1029,17 @@ async function loadAllData() {
         shopYearlyData[Number(cid)][yKey] = (shopYearlyData[Number(cid)][yKey] ?? 0) + months[mKey];
       }
     });
+  });
+
+  // 从 localStorage 加载已缓存的年度汇总（由 ensureMonthData 运行期间同步写入）
+  const lsYearly = lsLoadYearlyData();
+  Object.entries(lsYearly).forEach(([cid, years]) => {
+    const n = Number(cid);
+    if (shopYearlyData[n]) {
+      Object.entries(years).forEach(([y, amt]) => {
+        shopYearlyData[n][y] = (shopYearlyData[n][y] ?? 0) + amt;
+      });
+    }
   });
   console.log(`[缓存恢复] ${cacheHit} 个月份已加载，共 ${Object.keys(monthlyData).length} 个有数据月份`);
   // 诊断：打印广安门店(247412)各年份年度汇总
