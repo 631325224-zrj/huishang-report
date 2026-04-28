@@ -1925,6 +1925,7 @@ function ensureYearData(dimSnapshot, onReady) {
     }
   }
   if (allLoaded) return false; // 数据已就绪，无需异步等待
+  if (_yearBatchLoading) return true; // 已有加载任务在跑，不再重复启动
 
   // 按月份顺序串行加载（历史年每月需31次逐天请求，串行避免并发爆炸）
   const monthQueue = [];
@@ -2159,7 +2160,7 @@ function renderCharts(dim) {
 }
 
 // ════════ 渲染表格 ════════
-function renderTable(shops, dim) {
+function renderTable(shops, dim, loading) {
   // 如果当前 DOM 的表头已经是年份模式，禁止被旧状态（day/month）的调用覆盖
   // 原理：第1次用 dim=year 调用时设置年份表头；第2次用 dim=day 调用时跳过设置表头
   // resetSort() / sortTable() 会触发 render()，此时 STATE 可能仍是 year，dim 却是 day
@@ -2168,6 +2169,14 @@ function renderTable(shops, dim) {
 
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
+
+  // 加载中时显示提示行，不阻塞用户操作
+  if (loading) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:#999">
+      <div style="font-size:14px">📡 正在加载年报数据，请稍候…</div>
+      <div style="font-size:12px;margin-top:8px">加载期间您可以浏览已就绪的数据</div>
+    </td></tr>`;
+  }
 
   let labelA = '', labelB = '';
   if (dim === 'month') {
@@ -2297,14 +2306,14 @@ async function render() {
     return true;
   });
   
-  // 应用排序
+  // 应用排序（始终用 STATE.dim，防止 year 模式下闭包 dim 仍是旧值导致排序错误）
   if (SORT.field && shops.length > 1) {
     shops.sort((a, b) => {
       let valA, valB;
-      const revA_a = getSummaryRevenue(true, a.centerId, dim);
-      const revA_b = getSummaryRevenue(true, b.centerId, dim);
-      const revB_a = getSummaryRevenue(false, a.centerId, dim);
-      const revB_b = getSummaryRevenue(false, b.centerId, dim);
+      const revA_a = getSummaryRevenue(true, a.centerId, STATE.dim);
+      const revA_b = getSummaryRevenue(true, b.centerId, STATE.dim);
+      const revB_a = getSummaryRevenue(false, a.centerId, STATE.dim);
+      const revB_b = getSummaryRevenue(false, b.centerId, STATE.dim);
       const ch_a = calcChange(revA_a, revB_a);
       const ch_b = calcChange(revA_b, revB_b);
       
@@ -2327,15 +2336,23 @@ async function render() {
   document.getElementById('table-meta').textContent = `共 ${shops.length} 家门店`;
 
   // 年报维度：如果数据尚未全部加载，先触发加载，等待完成后重新 render
-  if (dim === 'year') {
-    const stillLoading = ensureYearData(dim, () => render());
-    if (stillLoading) return; // 数据未就绪，等加载完毕后 render() 会被自动调用
+  if (STATE.dim === 'year') {
+    // 立即渲染表头和表格（不等待全部数据加载完），确保用户点击年报后表头立即正确
+    renderSummary(STATE.dim);
+    renderTable(shops, STATE.dim, true /*loading=*/);
+    renderCharts(STATE.dim);
+    // 后台异步加载数据，每完成一个月就触发一次增量渲染（渐进式呈现）
+    ensureYearData(STATE.dim, () => {
+      renderSummary(STATE.dim);
+      renderTable(shops, STATE.dim, false);
+      renderCharts(STATE.dim);
+    });
+    return; // 已启动异步加载，不再阻塞
   }
 
-  // ⚠️ 直接用 STATE.dim，防止 year 模式下 renderSummary/renderTable 使用闭包捕获的旧 dim='day'
   renderSummary(STATE.dim);
-  renderTable(shops, STATE.dim);
-  renderCharts(dim);
+  renderTable(shops, STATE.dim, false);
+  renderCharts(STATE.dim);
 }
 
 // ═══════════════════════════════════════════════════════
