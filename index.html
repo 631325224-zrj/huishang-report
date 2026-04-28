@@ -878,7 +878,7 @@ function lsLoadMonth(key) {
 
 function lsSaveMeta() {
   lsSet(LS_META, { loadedMonths: [...loadedMonths] });
-  lsSaveYearlyData(DATA.shopYearlyData); // ✅ 同步保存年度汇总，防止刷新丢失
+  if (DATA?.shopYearlyData) lsSaveYearlyData(DATA.shopYearlyData); // 防止 DATA 未初始化时抛错
 }
 
 function lsSaveYearlyData(shopYearlyData) {
