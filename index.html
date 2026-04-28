@@ -916,9 +916,9 @@ function lsLoadYearlyData() {
 }
 
 // ══════════════════════════════════════════════════════════
-// 清理旧缓存（v7：月度 API 改用 getBusinessSituation，旧 getserialdata 缓存数据不兼容，强制重建）
+// 清理旧缓存（v8→v9：历史年 getserialdata API 口径错误导致年度数据约3倍偏差，必须清除旧缓存重建）
 // ══════════════════════════════════════════════════════════
-const LS_CACHE_VERSION = 'v8';  // v7→v8：新增 shopYearlyData 本地存储，防止刷新后年报数据丢失，清除旧缓存重建
+const LS_CACHE_VERSION = 'v9';  // v9：历史年改用 getBusinessSituation(dateType=1) 替代 getserialdata，清除旧缓存
 
 function lsClearOldCache() {
   // 检查是否需要清理旧缓存
