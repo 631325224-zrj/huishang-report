@@ -47,6 +47,25 @@
 
 ---
 
+### 🎯 里程碑2（2026-04-09）：月度汇总 API 选型修复 ✅
+
+**问题**：月度汇总数据和文档始终差 80~251 元，无法消除
+
+**根本原因**（历经多次错误后才找到）：
+1. 最初用 `getserialdata` API + `last_total - not_income_money` → 有细微差异
+2. 改用 `item_income_total` → 数据不正确
+3. 改回 `last_total - not_income_money` → 差异依旧
+4. **最终发现**：`getserialdata` API 口径 ≠ `getBusinessSituation` API 口径
+
+**正确方案**：月度汇总（月维度数据）也必须用 `getBusinessSituation` API
+- 代码位置：`queryMonthBillList` 函数（第410行附近）
+- 纯收字段：`income.incomeTotal`（与日数据完全相同）
+- 字段路径：`data.List.income.incomeTotal`
+
+**教训**：不能用账单明细 API（`getserialdata`）来汇总月度数据，两个 API 数据源口径不同。
+
+---
+
 ## 收银系统 API 数据结构（huiShang）
 
 ```json
@@ -116,7 +135,22 @@
 **问题**：bug 期间把错误年份的 key（如 `2025-03` 实为 `2026-03`）写入了 localStorage，后续刷新从缓存读到错误数据。
 **解决方案**：`lsRestoreMonths` 加校验逻辑：年份须在 onlineYear~curYear 范围内，不能是未来月份，格式须为 `YYYY-MM`。发现非法 key 自动从 localStorage 删除。
 
-### 9. 同比加载无效历史年份导致数据错乱（2026-04-08 新增）
+### 11. 历史年份月度数据为0（getserialdata 超时）（2026-04-15 新增）
+**问题**：年报点击后，2025年所有门店数据显示0.00。
+**根本原因**：`queryMonthBillList` 使用 `getserialdata` 逐天逐页查询，历史年份每月需31天×28门店×多页 = 千次以上请求，全部超时。
+**解决方案**：改用 `getBusinessSituation`（`dateType=2` 月维度），每门店只需1次请求，直接返回整月 `income.incomeTotal`，数据口径与日数据完全一致。缓存版本升级 v6→v7。
+**教训**：月度/年度查询不能用明细 API（getserialdata），必须用 `getBusinessSituation`。
+- `dateType=3`（月维度）：仅对**当前年（2026）** 有效，返回整月数据；对**历史年（2025）** 只返回月初1天数据（约14825元/天）
+- `getBusinessSituation beginDate/endDate`：**历史年不支持**此参数组合
+- **`getserialdata`**：历史年唯一正确的 API，纯收公式 = `last_total - not_income_money`（实收-非收入），不能用 `income` 字段！
+- `getserialdata dateType=3`：**也不支持整月**，等同月初1天数据，无效
+- 当前代码 `queryMonthBillList` 已按此逻辑分叉：2026年用 dateType=3，2025年用 getserialdata 逐天查（8天/批，300ms间隔）
+- `ensureYearData`：改为月份串行队列（2个并发 worker），避免12月×28门店全部同时发起请求超时
+
+
+**问题**：初始化第一阶段从 localStorage 恢复历史月份数据（`lsRestoreMonths`），第三阶段预加载又对同一月份发 API 请求并累加，导致年度数据比收银系统偏大（2025 年各门店数据约偏大 2,100 元）。
+**解决方案**：预加载前后各检查一次 `loadedMonths.has(pk)`，已加载则跳过，不再重复累加。
+**配合升级**：缓存版本 v5→v6，强制清除脏数据。
 **问题**：初始 `STATE.compare='yoy'`，`STATE.yearB=2025`，`render()` 触发 `ensureMonthData(2025, month)`，API 不支持真实历史年份，实际返回当前月数据，被存入 `2025-XX` 错误 key，导致数据混乱。
 **解决方案**：
 1. `ensureMonthData` 头部增加年份校验：年份须 `>= onlineYear` 且 `<= 当前年`，否则跳过
@@ -127,6 +161,12 @@
 **问题**：初始加载已包含某月部分数据，ensureMonthData 加载完整月份时未清除旧数据，导致累加变大。
 **案例**：初始 35 天数据包含 2 月 6-28 日，ensureMonthData 加载完整 2 月时再次累加，导致数值偏大（如 1374131 而非 692168）。
 **避免**：ensureMonthData 加载前必须先清零该月所有相关数据（monthlyData、yearlyData、shopMonthlyData、shopYearlyData）再重新聚合。
+
+### 12. getServiceArea centerId 参数含义（2026-04-16 新增）
+**问题**：调用 `getServiceArea` 时只传了门店 centerId，返回 -400003（token 无效）。
+**根本原因**：`centerId` 参数是**餐饮集团ID**（247412），不是门店 ID。`shopId` 才是门店的 centerId（可选参数）。
+**正确用法**：`getServiceArea?centerId=247412&shopId={门店centerId}&pageNo=1&pageSize=200`
+**教训**：`getServiceArea` 和 `getBusinessSituation` 参数规范相同：`centerId` = 集团总部 ID，`shopId` = 门店自身 centerId。
 
 ---
 

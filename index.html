@@ -1032,18 +1032,19 @@ async function loadAllData() {
   });
 
   // 从 localStorage 加载已缓存的年度汇总（由 ensureMonthData 运行期间同步写入）
+  // ⚠️ 注意：shopYearlyData 已从 monthlyData 累加，此处直接覆盖不用累加（避免双重计数）
   const lsYearly = lsLoadYearlyData();
   Object.entries(lsYearly).forEach(([cid, years]) => {
     const n = Number(cid);
     if (shopYearlyData[n]) {
       Object.entries(years).forEach(([y, amt]) => {
-        shopYearlyData[n][y] = (shopYearlyData[n][y] ?? 0) + amt;
+        shopYearlyData[n][y] = amt;  // 直接覆盖，不累加
       });
     }
   });
   console.log(`[缓存恢复] ${cacheHit} 个月份已加载，共 ${Object.keys(monthlyData).length} 个有数据月份`);
-  // 诊断：打印广安门店(247412)各年份年度汇总
-  const guanAnSid = 247412;
+  // 诊断：打印广安门店(247415)各年份年度汇总
+  const guanAnSid = 247415;
   ['2025','2026'].forEach(y => {
     const v = shopYearlyData[guanAnSid]?.[y];
     console.log(`[诊断] 广安门店 ${y} 年度汇总: ${v} (${typeof v})`);
@@ -1309,6 +1310,7 @@ async function ensureMonthData(year, month) {
     const results = await batchQuery(wrappedTasks, isHist ? 3 : 8);
 
     const shopMonthTmp = {};
+    const guanAnSid = 247415;
     results.forEach(result => {
       if (result?.shops) {
         Object.entries(result.shops).forEach(([sid, shopData]) => {
@@ -1321,12 +1323,20 @@ async function ensureMonthData(year, month) {
             DATA.shopMonthlyData[n][key] = (DATA.shopMonthlyData[n][key] || 0) + shopData.income;
             DATA.shopYearlyData[n][yKey] = (DATA.shopYearlyData[n][yKey] || 0) + shopData.income;
             shopMonthTmp[n] = (shopMonthTmp[n] || 0) + shopData.income;
+            // 🔍 诊断：广安门店(247415)每月明细
+            if (n === guanAnSid) {
+              console.log(`[广安 ${key}] API返回纯收=${shopData.income.toFixed(2)}`);
+            }
           }
         });
       }
     });
 
     console.log(`[${key} 账单API聚合] 总纯收: ${DATA.monthlyData[key].toFixed(2)}, 参与门店数: ${Object.keys(shopMonthTmp).length}`);
+    // 🔍 诊断：广安2025年汇总（逐月累加）
+    if (key.startsWith('2025')) {
+      console.log(`[广安2025汇总] 当前年度累计=${(DATA.shopYearlyData[guanAnSid]?.['2025'] || 0).toFixed(2)}, 月份=${key}`);
+    }
 
     // ── 写入 localStorage，下次访问直接用缓存，无需再请求 API ──
     lsSaveMonth(key, DATA.monthlyData[key], shopMonthTmp);
