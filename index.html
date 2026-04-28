@@ -583,28 +583,27 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   try {
     if (isHistorical) {
       // 历史年：逐天查询 getserialdata dateType=1，累加 last_total - not_income_money
+      // 批大小=8天，间隔300ms（实测不限流，加快速度）
       const lastDay = new Date(year, month, 0).getDate();
       const days = Array.from({ length: lastDay }, (_, i) => i + 1);
-
-      // 分批：每批 N 天，间隔 delay ms
-      const BATCH_SIZE = 5;
-      const BATCH_DELAY = 800;
+      const BATCH_SIZE = 8;
+      const BATCH_DELAY = 300;
 
       for (let b = 0; b < days.length; b += BATCH_SIZE) {
         const batch = days.slice(b, b + BATCH_SIZE);
         const promises = batch.map(d => {
-          const day = String(d).padStart(2, '0');
-          const date = `${monthStr}-${day}`;
+          const dayStr = String(d).padStart(2, '0');
+          const dateStr = `${monthStr}-${dayStr}`;
           return fetchWithTimeout(
-            `${API_CONFIG.baseUrl}/datatransfer/getserialdata?centerId=${centerId}&shopId=${shopId}&settleDate=${date}&dateType=1&pageNo=1&pageSize=500`,
-            15000
+            `${API_CONFIG.baseUrl}/datatransfer/getserialdata?centerId=${centerId}&shopId=${shopId}&settleDate=${dateStr}&dateType=1&pageNo=1&pageSize=500`,
+            12000
           ).then(async res => {
             const j = await res.json();
             const list = j?.data?.billList || [];
-            return list.reduce((s, b) => s + (parseFloat(b.last_total) || 0) - (parseFloat(b.not_income_money) || 0), 0);
+            return list.reduce((s, row) => s + (parseFloat(row.last_total) || 0) - (parseFloat(row.not_income_money) || 0), 0);
           }).catch(() => 0);
         });
-        income += (await Promise.all(promises)).reduce((a, b) => a + b, 0);
+        income += (await Promise.all(promises)).reduce((a, v) => a + v, 0);
         if (b + BATCH_SIZE < days.length) await sleep(BATCH_DELAY);
       }
     } else {
@@ -1246,10 +1245,18 @@ async function ensureMonthData(year, month) {
     });
 
     // ── 使用账单明细 API（getserialdata）获取整月数据 ──
-    // 每个门店单独查询并聚合（28次请求，每次分页获取全部账单）
-    const tasks = shopIds.map(shopId => () => queryMonthBillList(year, month, API_CONFIG.centerId, shopId));
-    console.log(`[${key}] 发起账单明细请求: ${tasks.length} 个门店`);
-    const results = await batchQuery(tasks, 5);  // 降低并发，避免API限流
+    // 历史年：逐天查询（8天/批，300ms间隔），当年：getBusinessSituation dateType=3 单次
+    const isHist = year < new Date().getFullYear();
+    const tasks = shopIds.map(sid => () => queryMonthBillList(year, month, API_CONFIG.centerId, sid));
+    console.log(`[${key}] 发起账单明细请求: ${tasks.length} 个门店 (历史=${isHist})`);
+    if (loadingEl) loadingEl.textContent = `↻ 加载 ${monthName}… (0/${tasks.length})`;
+    let doneCount = 0;
+    const wrappedTasks = tasks.map(t => () => t().then(r => {
+      doneCount++;
+      if (loadingEl) loadingEl.textContent = `↻ 加载 ${monthName}… (${doneCount}/${tasks.length})`;
+      return r;
+    }));
+    const results = await batchQuery(wrappedTasks, isHist ? 3 : 8);
 
     const shopMonthTmp = {};
     results.forEach(result => {
@@ -1878,22 +1885,45 @@ function ensureYearData(dimSnapshot, onReady) {
   }
   if (allLoaded) return false; // 数据已就绪，无需异步等待
 
-  const promises = [];
+  // 按月份顺序串行加载（历史年每月需31次逐天请求，串行避免并发爆炸）
+  const monthQueue = [];
   for (let m = yOnlyMinMonth; m <= yOnlyMaxMonth; m++) {
-    promises.push(ensureMonthData(STATE.yearOnly, m));
+    if (!loadedMonths.has(`${STATE.yearOnly}-${String(m).padStart(2,'0')}`)) monthQueue.push([STATE.yearOnly, m]);
   }
   for (let m = yPrevMinMonth; m <= yPrevMaxMonth; m++) {
-    promises.push(ensureMonthData(STATE.yearPrev, m));
+    if (!loadedMonths.has(`${STATE.yearPrev}-${String(m).padStart(2,'0')}`)) monthQueue.push([STATE.yearPrev, m]);
   }
+  const totalMonths = monthQueue.length;
 
   // 显示加载中状态
   const loadingEl = document.getElementById('month-loading');
   if (loadingEl) {
     loadingEl.style.display = '';
-    loadingEl.textContent = `↻ 加载年报数据（${promises.length} 个月）…`;
+    loadingEl.textContent = `↻ 加载年报数据（0/${totalMonths} 个月）…`;
   }
 
   _yearBatchLoading = true; // 禁止 ensureMonthData 单独触发 render
+
+  // 串行执行月份队列（防止历史年并发爆炸），同时允许最多2个月并发
+  const YEAR_MONTH_CONCURRENCY = 2;
+  let doneMonths = 0;
+  const runQueue = async () => {
+    const runners = [];
+    for (let i = 0; i < YEAR_MONTH_CONCURRENCY; i++) {
+      runners.push((async () => {
+        while (monthQueue.length > 0) {
+          const [y, m] = monthQueue.shift();
+          await ensureMonthData(y, m);
+          doneMonths++;
+          if (loadingEl) loadingEl.textContent = `↻ 加载年报数据（${doneMonths}/${totalMonths} 个月）…`;
+        }
+      })());
+    }
+    await Promise.all(runners);
+  };
+
+  const promises = [runQueue()];
+
   Promise.all(promises).then(() => {
     _yearBatchLoading = false;
     if (loadingEl) loadingEl.style.display = 'none';
