@@ -218,7 +218,14 @@ canvas { display: block; }
     </div>
 
     <button id="btnReset" class="btn btn-primary" style="margin-left:auto">重置</button>
+    <button id="btnTestYearDim" class="btn" style="background:#8e44ad;color:#fff;border-color:#8e44ad;font-size:11px;padding:4px 10px">🔍 探测年维度</button>
     <div class="ctrl-hint" id="ctrl-hint"></div>
+  </div>
+
+  <!-- 年维度探测结果区域 -->
+  <div id="year-dim-result" style="display:none;background:#fff;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06)">
+    <div style="font-weight:700;margin-bottom:6px;color:#8e44ad">🔍 年维度 API 探测结果（广安门店 2025年）</div>
+    <div id="year-dim-content"></div>
   </div>
 
   <!-- ══ 出租率报表区域 ══ -->
@@ -1636,6 +1643,61 @@ function bindEvents() {
   if (btnQueryOcc) {
     btnQueryOcc.addEventListener('click', () => renderOccupancy());
   }
+
+  // 🔍 年维度探测按钮
+  document.getElementById('btnTestYearDim').addEventListener('click', async () => {
+    const resultEl = document.getElementById('year-dim-result');
+    const contentEl = document.getElementById('year-dim-content');
+    resultEl.style.display = 'block';
+    contentEl.innerHTML = '⏳ 探测中，请稍候…';
+
+    const centerId = 247412;
+    const shopId = 247415; // 广安门店
+    const year = 2025;
+    const settleDate = `${year}-01-01`;
+
+    let html = '<table style="width:auto;border-collapse:collapse;margin-top:8px"><tr style="font-weight:700"><td style="padding:4px 12px;border:1px solid #eee">dateType</td><td style="padding:4px 12px;border:1px solid #eee">income (incomeTotal)</td><td style="padding:4px 12px;border:1px solid #eee">last (businessData)</td><td style="padding:4px 12px;border:1px solid #eee">说明</td></tr>';
+
+    for (const dt of [1, 2, 3, 4, 5, 6]) {
+      try {
+        const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${settleDate}&dateType=${dt}`;
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 10000);
+        const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
+          signal: controller.signal
+        });
+        clearTimeout(tid);
+        const json = await res.json();
+        const income = parseFloat(json?.data?.List?.income?.incomeTotal) || 0;
+        const last = parseFloat(json?.data?.List?.businessData?.last) || 0;
+        const orig = parseFloat(json?.data?.List?.businessData?.orig) || 0;
+        const disc = parseFloat(json?.data?.List?.businessData?.discTotal) || 0;
+
+        let note = '—';
+        if (dt === 1) note = '日维度（单日）';
+        else if (dt === 2) note = '周维度';
+        else if (dt === 3) note = '月维度（当月）';
+        else if (dt === 4) note = '年维度?';
+        else if (dt === 5) note = '?';
+        else if (dt === 6) note = '?';
+
+        const ok = income > 0 || last > 0;
+        html += `<tr style="background:${ok ? '#f0fff4' : '#fff5f5'}">
+          <td style="padding:4px 12px;border:1px solid #eee;font-weight:700">dateType=${dt}</td>
+          <td style="padding:4px 12px;border:1px solid #eee;text-align:right">${income > 0 ? '✅ ' + income.toFixed(2) : '❌ 0'}</td>
+          <td style="padding:4px 12px;border:1px solid #eee;text-align:right">${last > 0 ? last.toFixed(2) : '-'}</td>
+          <td style="padding:4px 12px;border:1px solid #eee;color:#666;font-size:11px">${note}</td>
+        </tr>`;
+      } catch(e) {
+        html += `<tr><td style="padding:4px 12px;border:1px solid #eee">dateType=${dt}</td><td colspan="3" style="padding:4px 12px;border:1px solid #eee;color:#c0392b">❌ ${e.message}</td></tr>`;
+      }
+    }
+    html += '</table>';
+    html += '<div style="margin-top:8px;font-size:11px;color:#888">正确值参考：2025全年纯收 ≈ 9,644,444.31</div>';
+    contentEl.innerHTML = html;
+  });
   const occDateEl = document.getElementById('occDateA');
   if (occDateEl) occDateEl.addEventListener('change', e => { STATE.occDateA = e.target.value; });
   const selOccYA = document.getElementById('selOccYearA');
