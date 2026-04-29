@@ -1653,16 +1653,27 @@ function bindEvents() {
 
     const centerId = 247412;
     const shopId = 247415; // 广安门店
-    const year = 2025;
-    const settleDate = `${year}-09-01`; // 用9月1日（正常工作日，有实际营业数据）
 
-    let html = '<table style="width:auto;border-collapse:collapse;margin-top:8px"><tr style="font-weight:700"><td style="padding:4px 12px;border:1px solid #eee">dateType</td><td style="padding:4px 12px;border:1px solid #eee">income (incomeTotal)</td><td style="padding:4px 12px;border:1px solid #eee">last (businessData)</td><td style="padding:4px 12px;border:1px solid #eee">说明</td></tr>';
+    // 构造表格：测试不同的 beginDate/endDate 组合
+    const tests = [
+      { label: '单日查询 2025-09-01', settleDate: '2025-09-01', beginDate: '2025-09-01 06:00:00', endDate: '2025-09-01 06:00:00', note: '基准（单日）' },
+      { label: '整月查询 2025-09', settleDate: '2025-09-01', beginDate: '2025-09-01 06:00:00', endDate: '2025-09-30 06:00:00', note: '月维度参考' },
+      { label: '全年查询 2025-01~12', settleDate: '2025-06-01', beginDate: '2025-01-01 06:00:00', endDate: '2025-12-31 06:00:00', note: '🔥 年维度？' },
+    ];
 
-    for (const dt of [1, 2, 3, 4, 5, 6]) {
+    let html = '<table style="width:auto;border-collapse:collapse;margin-top:8px">';
+    html += '<tr style="font-weight:700;background:#8e44ad;color:#fff">';
+    html += '<td style="padding:6px 12px;border:1px solid #ddd">查询方式</td>';
+    html += '<td style="padding:6px 12px;border:1px solid #ddd">说明</td>';
+    html += '<td style="padding:6px 12px;border:1px solid #ddd">incomeTotal</td>';
+    html += '<td style="padding:6px 12px;border:1px solid #ddd">HTTP状态</td>';
+    html += '<td style="padding:6px 12px;border:1px solid #ddd">返回摘要</td></tr>';
+
+    for (const t of tests) {
       try {
-        const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${settleDate}&dateType=${dt}`;
+        const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${t.settleDate}&beginDate=${encodeURIComponent(t.beginDate)}&endDate=${encodeURIComponent(t.endDate)}`;
         const controller = new AbortController();
-        const tid = setTimeout(() => controller.abort(), 10000);
+        const tid = setTimeout(() => controller.abort(), 15000);
         const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
@@ -1671,31 +1682,25 @@ function bindEvents() {
         clearTimeout(tid);
         const json = await res.json();
         const income = parseFloat(json?.data?.List?.income?.incomeTotal) || 0;
-        const last = parseFloat(json?.data?.List?.businessData?.last) || 0;
-        const orig = parseFloat(json?.data?.List?.businessData?.orig) || 0;
-        const disc = parseFloat(json?.data?.List?.businessData?.discTotal) || 0;
-
-        let note = '—';
-        if (dt === 1) note = '日维度（单日）';
-        else if (dt === 2) note = '周维度';
-        else if (dt === 3) note = '月维度（当月）';
-        else if (dt === 4) note = '年维度?';
-        else if (dt === 5) note = '?';
-        else if (dt === 6) note = '?';
-
-        const ok = income > 0 || last > 0;
+        const summary = json?.data ? JSON.stringify(json.data).substring(0, 100) : '空数据';
+        const ok = income > 0;
         html += `<tr style="background:${ok ? '#f0fff4' : '#fff5f5'}">
-          <td style="padding:4px 12px;border:1px solid #eee;font-weight:700">dateType=${dt}</td>
-          <td style="padding:4px 12px;border:1px solid #eee;text-align:right">${income > 0 ? '✅ ' + income.toFixed(2) : '❌ 0'}</td>
-          <td style="padding:4px 12px;border:1px solid #eee;text-align:right">${last > 0 ? last.toFixed(2) : '-'}</td>
-          <td style="padding:4px 12px;border:1px solid #eee;color:#666;font-size:11px">${note}</td>
+          <td style="padding:6px 12px;border:1px solid #ddd;font-weight:600">${t.label}</td>
+          <td style="padding:6px 12px;border:1px solid #ddd;color:#666;font-size:11px">${t.note}</td>
+          <td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-weight:700;color:${ok ? '#27ae60' : '#c0392b'}">${income > 0 ? '✅ ' + income.toLocaleString('zh-CN', {minimumFractionDigits:2}) : '❌ 0'}</td>
+          <td style="padding:6px 12px;border:1px solid #ddd">${res.status}</td>
+          <td style="padding:6px 12px;border:1px solid #ddd;font-size:10px;color:#888">${summary}</td>
         </tr>`;
       } catch(e) {
-        html += `<tr><td style="padding:4px 12px;border:1px solid #eee">dateType=${dt}</td><td colspan="3" style="padding:4px 12px;border:1px solid #eee;color:#c0392b">❌ ${e.message}</td></tr>`;
+        html += `<tr><td style="padding:6px 12px;border:1px solid #ddd">${t.label}</td><td colspan="4" style="padding:6px 12px;border:1px solid #ddd;color:#c0392b">❌ ${e.message}</td></tr>`;
       }
     }
     html += '</table>';
-    html += '<div style="margin-top:8px;font-size:11px;color:#888">正确值参考：2025全年纯收 ≈ 9,644,444.31</div>';
+    html += '<div style="margin-top:10px;padding:10px;background:#fef9e7;border-radius:6px;font-size:11px;color:#7d6608">';
+    html += '📌 正确值参考（已知）：2025全年纯收 ≈ <b>9,644,444.31</b><br>';
+    html += '📌 如果"全年查询"返回接近此值 → API 支持年维度 ✅<br>';
+    html += '📌 如果"全年查询"返回 0 或单日数据 → API 不支持年维度，需累加月数据 ❌';
+    html += '</div>';
     contentEl.innerHTML = html;
   });
   const occDateEl = document.getElementById('occDateA');
