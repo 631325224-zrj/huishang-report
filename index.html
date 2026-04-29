@@ -2580,6 +2580,74 @@ window.debugCompare = async function(date = '2026-02-01', shopId = '247413') {
   return { sumLastTotal, sumNotIncome, apiPure, docPure, diff: docPure - apiPure };
 };
 
+// ── 诊断：对比三种API方式对同一历史日期/月份的返回值 ──
+// 用法：在控制台执行  debugHistAPI('2025-09', 247415)
+// 会对比 getBusinessSituation dateType=1(每天) / dateType=3(月维度) / getserialdata(明细累加)
+window.debugHistAPI = async function(monthStr = '2025-09', shopId = 247415) {
+  const baseUrl = 'https://boss.huiShang56.com';
+  const tk = localStorage.getItem('wdtoken') || token || '';
+  const accessId = 'huiShang';
+  const centerId = 247412;
+  const [y, m] = monthStr.split('-').map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  const post = (url) => fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'access_token': tk, 'accessid': accessId, 'granttype': 'client' }
+  }).then(r => r.json());
+
+  console.log(`\n====== debugHistAPI: ${monthStr} 门店${shopId} ======`);
+
+  // ① getBusinessSituation dateType=1（逐天累加，当前方案）
+  let sumDay1 = 0;
+  for (let d = 1; d <= lastDay; d++) {
+    const dateStr = `${monthStr}-${String(d).padStart(2,'0')}`;
+    try {
+      const j = await post(`${baseUrl}/datatransfer/getBusinessSituation?centerId=${centerId}&shopId=${shopId}&settleDate=${dateStr}&dateType=1`);
+      const v = parseFloat(j?.data?.List?.income?.incomeTotal) || 0;
+      sumDay1 += v;
+    } catch(e) {}
+  }
+  console.log(`① getBusinessSituation dateType=1 逐天累加: ${sumDay1.toFixed(2)}`);
+
+  // ② getBusinessSituation dateType=3（月维度，单次）
+  try {
+    const j = await post(`${baseUrl}/datatransfer/getBusinessSituation?centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=3`);
+    const v = parseFloat(j?.data?.List?.income?.incomeTotal) || 0;
+    const bd = j?.data?.List?.businessData ?? {};
+    console.log(`② getBusinessSituation dateType=3（月维度）: income=${v.toFixed(2)}, last=${bd.last||0}, orig=${bd.orig||0}`);
+    console.log(`   完整income对象:`, JSON.stringify(j?.data?.List?.income));
+  } catch(e) { console.log('② 失败:', e.message); }
+
+  // ③ getserialdata dateType=1（逐天累加，原旧方案）
+  let sumSerial = 0;
+  for (let d = 1; d <= Math.min(3, lastDay); d++) {  // 只测前3天
+    const dateStr = `${monthStr}-${String(d).padStart(2,'0')}`;
+    try {
+      const j = await post(`${baseUrl}/datatransfer/getserialdata?centerId=${centerId}&shopId=${shopId}&settleDate=${dateStr}&dateType=1&pageNo=1&pageSize=500`);
+      const list = j?.data?.billList || [];
+      const dayVal = list.reduce((s, b) => s + (parseFloat(b.last_total)||0) - (parseFloat(b.not_income_money)||0), 0);
+      console.log(`③ getserialdata ${dateStr}: ${dayVal.toFixed(2)} (${list.length}条账单)`);
+      sumSerial += dayVal;
+    } catch(e) {}
+  }
+  // 按前3天平均推算整月
+  const proj = (sumSerial / 3) * lastDay;
+  console.log(`③ getserialdata 前3天合计=${sumSerial.toFixed(2)}, 按比例推算整月≈${proj.toFixed(2)}`);
+
+  // ④ getBusinessSituation dateType=1 单日样本（第1天）
+  try {
+    const dateStr = `${monthStr}-01`;
+    const j = await post(`${baseUrl}/datatransfer/getBusinessSituation?centerId=${centerId}&shopId=${shopId}&settleDate=${dateStr}&dateType=1`);
+    console.log(`\n④ 单日(${dateStr}) 完整API响应（income+notIncome+businessData）:`);
+    console.log('  income:', JSON.stringify(j?.data?.List?.income));
+    console.log('  notIncome:', JSON.stringify(j?.data?.List?.notIncome));
+    console.log('  businessData:', JSON.stringify(j?.data?.List?.businessData));
+  } catch(e) {}
+
+  console.log(`\n>>> 请在商户后台(sly.tcsl.com.cn)查询广安门店 ${monthStr} 单月纯收，与以上数据对比`);
+  console.log(`    正确答案已知：2025全年 = 9,644,444.31`);
+};
+
 window.addEventListener('DOMContentLoaded', async () => {
   // ── 立即初始化 DATA 结构并渲染页面（不等待数据加载完毕）──
   // 修复：缓存清空后全量加载历史数据耗时过长，先渲染 UI 让用户看到页面，
