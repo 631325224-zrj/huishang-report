@@ -621,8 +621,8 @@ async function queryMonthBillList(year, month, centerId, shopId) {
         if (b + BATCH_SIZE < days.length) await sleep(BATCH_DELAY);
       }
     } else {
-      // 当年：用 settleDate+dateType=3（月维度，单次请求）
-      const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=3`;
+      // 当年：用 settleDate+dateType=2（营业日月维度，单次请求返回整月汇总）
+      const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=2`;
       const controller = new AbortController();
       const tid = setTimeout(() => controller.abort(), 12000);
       const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
@@ -1654,11 +1654,16 @@ function bindEvents() {
     const centerId = 247412;
     const shopId = 247415; // 广安门店
 
-    // 构造表格：测试不同的 beginDate/endDate 组合
+    // 根据API文档（https://doc.wuuxiang.com/showdoc/web/#/46/14375）：
+    // dateType=1 按自然日查询（需逐天累加）
+    // dateType=2 按营业日查询（可获得整月汇总）
+    // settleDate + dateType 配套使用，beginDate/settleDate都填时按settleDate查
     const tests = [
-      { label: '单日查询 2025-09-01', settleDate: '2025-09-01', beginDate: '2025-09-01 06:00:00', endDate: '2025-09-01 06:00:00', note: '基准（单日）' },
-      { label: '整月查询 2025-09', settleDate: '2025-09-01', beginDate: '2025-09-01 06:00:00', endDate: '2025-09-30 06:00:00', note: '月维度参考' },
-      { label: '全年查询 2025-01~12', settleDate: '2025-06-01', beginDate: '2025-01-01 06:00:00', endDate: '2025-12-31 06:00:00', note: '🔥 年维度？' },
+      { label: 'dateType=1 + settleDate=2025-09-01', dateType: '1', settleDate: '2025-09-01', note: '自然日（单日基准）' },
+      { label: 'dateType=2 + settleDate=2025-09-01', dateType: '2', settleDate: '2025-09-01', note: '营业日（当月汇总？）' },
+      { label: 'dateType=2 + settleDate=2025-09-15', dateType: '2', settleDate: '2025-09-15', note: '营业日（月中查）' },
+      { label: 'dateType=1 + settleDate=2025-10-01', dateType: '1', settleDate: '2025-10-01', note: '自然日（10月1日）' },
+      { label: 'dateType=2 + settleDate=2025-10-01', dateType: '2', settleDate: '2025-10-01', note: '营业日（10月汇总？）' },
     ];
 
     let html = '<table style="width:auto;border-collapse:collapse;margin-top:8px">';
@@ -1666,14 +1671,14 @@ function bindEvents() {
     html += '<td style="padding:6px 12px;border:1px solid #ddd">查询方式</td>';
     html += '<td style="padding:6px 12px;border:1px solid #ddd">说明</td>';
     html += '<td style="padding:6px 12px;border:1px solid #ddd">incomeTotal</td>';
-    html += '<td style="padding:6px 12px;border:1px solid #ddd">HTTP状态</td>';
-    html += '<td style="padding:6px 12px;border:1px solid #ddd">返回摘要</td></tr>';
+    html += '<td style="padding:6px 12px;border:1px solid #ddd">HTTP</td>';
+    html += '<td style="padding:6px 12px;border:1px solid #ddd">备注</td></tr>';
 
     for (const t of tests) {
       try {
-        const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${t.settleDate}&beginDate=${encodeURIComponent(t.beginDate)}&endDate=${encodeURIComponent(t.endDate)}`;
+        const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${t.settleDate}&dateType=${t.dateType}`;
         const controller = new AbortController();
-        const tid = setTimeout(() => controller.abort(), 15000);
+        const tid = setTimeout(() => controller.abort(), 12000);
         const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
@@ -1682,14 +1687,19 @@ function bindEvents() {
         clearTimeout(tid);
         const json = await res.json();
         const income = parseFloat(json?.data?.List?.income?.incomeTotal) || 0;
-        const summary = json?.data ? JSON.stringify(json.data).substring(0, 100) : '空数据';
+        const bd = json?.data?.List?.businessData ?? {};
+        const last = parseFloat(bd.last) || 0;
+        let note = '';
+        if (income > 5000) note = '🔥 接近月汇总';
+        else if (income > 100) note = '可能日数据';
+        else note = '单日？';
         const ok = income > 0;
         html += `<tr style="background:${ok ? '#f0fff4' : '#fff5f5'}">
-          <td style="padding:6px 12px;border:1px solid #ddd;font-weight:600">${t.label}</td>
-          <td style="padding:6px 12px;border:1px solid #ddd;color:#666;font-size:11px">${t.note}</td>
+          <td style="padding:6px 12px;border:1px solid #ddd;font-weight:600;font-size:11px">${t.label}</td>
+          <td style="padding:6px 12px;border:1px solid #ddd;color:#666;font-size:10px">${t.note}</td>
           <td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-weight:700;color:${ok ? '#27ae60' : '#c0392b'}">${income > 0 ? '✅ ' + income.toLocaleString('zh-CN', {minimumFractionDigits:2}) : '❌ 0'}</td>
           <td style="padding:6px 12px;border:1px solid #ddd">${res.status}</td>
-          <td style="padding:6px 12px;border:1px solid #ddd;font-size:10px;color:#888">${summary}</td>
+          <td style="padding:6px 12px;border:1px solid #ddd;font-size:10px;color:#888">${note}</td>
         </tr>`;
       } catch(e) {
         html += `<tr><td style="padding:6px 12px;border:1px solid #ddd">${t.label}</td><td colspan="4" style="padding:6px 12px;border:1px solid #ddd;color:#c0392b">❌ ${e.message}</td></tr>`;
@@ -1697,12 +1707,10 @@ function bindEvents() {
     }
     html += '</table>';
     html += '<div style="margin-top:10px;padding:10px;background:#fef9e7;border-radius:6px;font-size:11px;color:#7d6608">';
-    html += '📌 正确值参考（已知）：2025全年纯收 ≈ <b>9,644,444.31</b><br>';
-    html += '📌 如果"全年查询"返回接近此值 → API 支持年维度 ✅<br>';
-    html += '📌 如果"全年查询"返回 0 或单日数据 → API 不支持年维度，需累加月数据 ❌';
-    html += '</div>';
-    contentEl.innerHTML = html;
-  });
+    html += '📌 <b>dateType=1</b> = 按自然日查询（单次返回一天）<br>';
+    html += '📌 <b>dateType=2</b> = 按营业日查询（期待：返回整月汇总）<br>';
+    html += '📌 如果 dateType=2 返回接近月汇总 → 当年用 dateType=2 单次请求即可<br>';
+    html += '📌 如果 dateType=2 返回单日数据 → 当年也需要逐日累加';
   const occDateEl = document.getElementById('occDateA');
   if (occDateEl) occDateEl.addEventListener('change', e => { STATE.occDateA = e.target.value; });
   const selOccYA = document.getElementById('selOccYearA');
