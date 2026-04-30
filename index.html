@@ -589,9 +589,9 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   let income = 0;
   try {
     if (isHistorical) {
-      // 历史年：逐天查询 getBusinessSituation dateType=1，取 income.incomeTotal
-      // （不能用 getserialdata，它对历史年份返回全门店汇总数据而非单店数据）
-      // 批大小=8天，间隔300ms（避免并发过高超时）
+      // 历史年：getBusinessSituation 对历史年全部返回0（已探测验证）
+      // 必须用 getserialdata 逐天查，纯收公式 = last_total - not_income_money
+      // 批大小=8天，间隔300ms
       const lastDay = new Date(year, month, 0).getDate();
       const days = Array.from({ length: lastDay }, (_, i) => i + 1);
       const BATCH_SIZE = 8;
@@ -602,26 +602,47 @@ async function queryMonthBillList(year, month, centerId, shopId) {
         const promises = batch.map(d => {
           const dayStr = String(d).padStart(2, '0');
           const dateStr = `${monthStr}-${dayStr}`;
-          const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${dateStr}&dateType=1`;
-          const controller = new AbortController();
-          const tid = setTimeout(() => controller.abort(), 12000);
-          return fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
-            signal: controller.signal,
-          }).then(async res => {
-            clearTimeout(tid);
-            const j = await res.json();
-            // 纯收金额 = income.incomeTotal（与当年 month 维度口径一致）
-            const incomeObj = j?.data?.List?.income;
-            return incomeObj?.incomeTotal !== undefined ? parseFloat(incomeObj.incomeTotal) || 0 : 0;
-          }).catch(() => { clearTimeout(tid); return 0; });
+          // getserialdata：分页查所有账单，纯收 = last_total - not_income_money
+          const fetchPage = async (pageNo) => {
+            const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${dateStr}&dateType=1&pageNo=${pageNo}&pageSize=200`;
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), 12000);
+            try {
+              const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getserialdata?${qs}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
+                signal: controller.signal,
+              });
+              clearTimeout(tid);
+              const j = await res.json();
+              const list = j?.data?.billList || [];
+              const total = parseInt(j?.data?.total) || 0;
+              const dayIncome = list.reduce((s, b) => s + (parseFloat(b.last_total) || 0) - (parseFloat(b.not_income_money) || 0), 0);
+              return { dayIncome, total, fetched: list.length };
+            } catch(e) { clearTimeout(tid); return { dayIncome: 0, total: 0, fetched: 0 }; }
+          };
+          return (async () => {
+            let dayTotal = 0;
+            const first = await fetchPage(1);
+            dayTotal += first.dayIncome;
+            // 如有多页，继续翻页
+            let fetched = first.fetched;
+            let page = 2;
+            while (fetched < first.total && first.total > 0 && fetched > 0) {
+              const more = await fetchPage(page++);
+              dayTotal += more.dayIncome;
+              fetched += more.fetched;
+              if (more.fetched === 0) break;
+            }
+            return dayTotal;
+          })();
         });
         income += (await Promise.all(promises)).reduce((a, v) => a + v, 0);
         if (b + BATCH_SIZE < days.length) await sleep(BATCH_DELAY);
       }
     } else {
-      // 当年：用 settleDate+dateType=2（营业日月维度，单次请求返回整月汇总）
+      // 当年（2026）：用 getBusinessSituation settleDate=YYYY-MM-01 + dateType=2
+      // dateType=2 对当年返回整月营业汇总，纯收 = income.incomeTotal
       const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=2`;
       const controller = new AbortController();
       const tid = setTimeout(() => controller.abort(), 12000);
@@ -923,9 +944,9 @@ function lsLoadYearlyData() {
 }
 
 // ══════════════════════════════════════════════════════════
-// 清理旧缓存（v8→v9：历史年 getserialdata API 口径错误导致年度数据约3倍偏差，必须清除旧缓存重建）
+// 清理旧缓存（v9→v10：历史年 getBusinessSituation 对2025年全部返回0，改回 getserialdata last_total-not_income_money）
 // ══════════════════════════════════════════════════════════
-const LS_CACHE_VERSION = 'v9';  // v9：历史年改用 getBusinessSituation(dateType=1) 替代 getserialdata，清除旧缓存
+const LS_CACHE_VERSION = 'v10';  // v10：历史年改回 getserialdata（dateType=1, last_total-not_income_money），清除v9错误数据
 
 function lsClearOldCache() {
   // 检查是否需要清理旧缓存
