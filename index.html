@@ -1711,6 +1711,9 @@ function bindEvents() {
     html += '📌 <b>dateType=2</b> = 按营业日查询（期待：返回整月汇总）<br>';
     html += '📌 如果 dateType=2 返回接近月汇总 → 当年用 dateType=2 单次请求即可<br>';
     html += '📌 如果 dateType=2 返回单日数据 → 当年也需要逐日累加';
+    html += '</div>';
+    contentEl.innerHTML = html;
+  });
   const occDateEl = document.getElementById('occDateA');
   if (occDateEl) occDateEl.addEventListener('change', e => { STATE.occDateA = e.target.value; });
   const selOccYA = document.getElementById('selOccYearA');
