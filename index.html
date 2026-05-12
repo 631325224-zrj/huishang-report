@@ -786,6 +786,7 @@ function updateProgress(percent, text) {
 const LS_MONTHLY = 'hs_monthly_cache';   // { 'YYYY-MM': { total, shops: { cid: amount } } }
 const LS_META    = 'hs_monthly_meta';     // { loadedMonths: ['2026-03', ...] }
 const LS_YEARLY  = 'hs_yearly_cache';     // { cid_year: amount, ... } e.g. { '247412_2025': 123456 }
+let loadedMonths = new Set();              // 已完整加载完毕（用于判断是否需要重新加载）
 
 function lsGet(key, fallback = null) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
@@ -1222,7 +1223,6 @@ const prevYearDate = d => { const x = new Date(d); x.setFullYear(x.getFullYear()
 
 // ════════ 按需加载历史月份数据 ════════
 let loadingMonths = new Set();   // 正在加载中
-let loadedMonths  = new Set();   // 已完整加载完毕（用于判断是否需要重新加载）
 
 async function ensureMonthData(year, month) {
   const key = `${year}-${p(month)}`;

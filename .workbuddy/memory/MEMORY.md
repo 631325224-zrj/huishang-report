@@ -135,17 +135,25 @@
 **问题**：bug 期间把错误年份的 key（如 `2025-03` 实为 `2026-03`）写入了 localStorage，后续刷新从缓存读到错误数据。
 **解决方案**：`lsRestoreMonths` 加校验逻辑：年份须在 onlineYear~curYear 范围内，不能是未来月份，格式须为 `YYYY-MM`。发现非法 key 自动从 localStorage 删除。
 
-### 11. 历史年份月度数据为0（getserialdata 超时）（2026-04-15 新增）
-**问题**：年报点击后，2025年所有门店数据显示0.00。
-**根本原因**：`queryMonthBillList` 使用 `getserialdata` 逐天逐页查询，历史年份每月需31天×28门店×多页 = 千次以上请求，全部超时。
-**解决方案**：改用 `getBusinessSituation`（`dateType=2` 月维度），每门店只需1次请求，直接返回整月 `income.incomeTotal`，数据口径与日数据完全一致。缓存版本升级 v6→v7。
-**教训**：月度/年度查询不能用明细 API（getserialdata），必须用 `getBusinessSituation`。
-- `dateType=3`（月维度）：仅对**当前年（2026）** 有效，返回整月数据；对**历史年（2025）** 只返回月初1天数据（约14825元/天）
-- `getBusinessSituation beginDate/endDate`：**历史年不支持**此参数组合
-- **`getserialdata`**：历史年唯一正确的 API，纯收公式 = `last_total - not_income_money`（实收-非收入），不能用 `income` 字段！
-- `getserialdata dateType=3`：**也不支持整月**，等同月初1天数据，无效
-- 当前代码 `queryMonthBillList` 已按此逻辑分叉：2026年用 dateType=3，2025年用 getserialdata 逐天查（8天/批，300ms间隔）
-- `ensureYearData`：改为月份串行队列（2个并发 worker），避免12月×28门店全部同时发起请求超时
+### 11. 历史年份月度数据（2026-04-15 新增，2026-05-07 最终确认）
+
+**API 支持范围（最终结论）**：
+- `getBusinessSituation dateType=2 + settleDate=YYYY-MM-01`：**历史年（2025）和当年（2026）均有效**
+  - 探测验证：2025-09-01 返回 54,394.95（整月汇总），非0
+  - dateType=1 和 dateType=2 对同一settleDate返回值相同，统一用 dateType=2（营业日口径更准确）
+- ~~`getBusinessSituation 历史年返回0`~~：**此结论已证伪**（之前探测有误）
+- `getserialdata 逐天查`：不推荐（每月31天×28店=868次请求，极慢）
+
+**当前方案（v11）**：历史年和当年统一用 `getBusinessSituation dateType=2 + settleDate=YYYY-MM-01`
+- 纯收字段：`data.List.income.incomeTotal`
+- 28门店每月只需28次请求，秒级加载
+
+**缓存版本演进**：v9→v10（错误改回getserialdata）→ v11（统一getBusinessSituation dateType=2）
+
+### 12. 预加载双重累加Bug（2026-05-07 新增）
+**问题**：第三阶段预加载循环中同时写 `monthlyData[pk]` 和 `DATA.monthlyData[pk]`，而两者是同一对象引用（`DATA.monthlyData = monthlyData`），导致每次写入实际上叠加了两倍。
+**现象**：2025年数据显示约1.58亿（正常应约1000万），偏大约15倍。
+**修复**：预加载只写本地变量（`monthlyData/yearlyData/shopMonthlyData/shopYearlyData`），不重复写 `DATA.*`。
 
 
 **问题**：初始化第一阶段从 localStorage 恢复历史月份数据（`lsRestoreMonths`），第三阶段预加载又对同一月份发 API 请求并累加，导致年度数据比收银系统偏大（2025 年各门店数据约偏大 2,100 元）。
