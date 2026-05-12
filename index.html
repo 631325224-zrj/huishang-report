@@ -2023,27 +2023,54 @@ function ensureYearData(dimSnapshot, onReady) {
 
   _yearBatchLoading = true; // 禁止 ensureMonthData 单独触发 render
 
-  // 串行执行月份队列（防止历史年并发爆炸），同时允许最多2个月并发
+  // ── 串行执行月份队列，同时最多2个月并发，确保每个 Promise 都能正确 resolve/reject ──
   const YEAR_MONTH_CONCURRENCY = 2;
   let doneMonths = 0;
   const runQueue = async () => {
-    const runners = [];
-    for (let i = 0; i < YEAR_MONTH_CONCURRENCY; i++) {
-      runners.push((async () => {
-        while (monthQueue.length > 0) {
-          const [y, m] = monthQueue.shift();
-          await ensureMonthData(y, m);
-          doneMonths++;
-          if (loadingEl) loadingEl.textContent = `↻ 加载年报数据（${doneMonths}/${totalMonths} 个月）…`;
-        }
-      })());
+    try {
+      console.log('[ensureYearData runQueue] 启动，月份队列:', monthQueue.length, '个');
+      const runners = [];
+      for (let i = 0; i < YEAR_MONTH_CONCURRENCY; i++) {
+        runners.push((async () => {
+          while (true) {
+            // 原子操作：先检查队列是否为空，再 shift，防止返回 undefined
+            const item = monthQueue.shift();
+            if (!item) break;
+            const [y, m] = item;
+            const key = `${y}-${String(m).padStart(2,'0')}`;
+            try {
+              console.log(`[ensureYearData] Runner-${i} 开始加载 ${key}`);
+              await ensureMonthData(y, m);
+              doneMonths++;
+              console.log(`[ensureYearData] Runner-${i} 完成 ${key} (${doneMonths}/${totalMonths})`);
+              if (loadingEl) loadingEl.textContent = `↻ 加载年报数据（${doneMonths}/${totalMonths} 个月）…`;
+            } catch (e) {
+              console.error(`[ensureYearData] Runner-${i} 异常 ${key}:`, e.message);
+              doneMonths++; // 仍然计入，防止永远卡在同一个月份
+            }
+          }
+          console.log(`[ensureYearData] Runner-${i} 退出`);
+        })());
+      }
+      await Promise.all(runners);
+      console.log('[ensureYearData runQueue] 全部 runner 完成');
+    } catch (e) {
+      console.error('[ensureYearData runQueue] 整体异常:', e);
     }
-    await Promise.all(runners);
   };
 
-  const promises = [runQueue()];
+  console.log('[ensureYearData] 开始异步加载，月份队列长度:', monthQueue.length);
+  const queuePromise = runQueue();
+  console.log('[ensureYearData] runQueue() 已启动，返回 Promise:', queuePromise);
 
-  Promise.all(promises).then(() => {
+  queuePromise.then(() => {
+    console.log('[ensureYearData ✅ Promise.resolve] runQueue 完成');
+  }).catch(err => {
+    console.error('[ensureYearData ❌ Promise.reject] runQueue 异常:', err);
+  });
+
+  // 用 Promise.resolve 包装，确保一定是 Promise，不会出现意外情况
+  Promise.resolve(queuePromise).then(() => {
     _yearBatchLoading = false;
     if (loadingEl) loadingEl.style.display = 'none';
     console.log('[ensureYearData ✅ 完成] 触发回调，重新渲染表格');
