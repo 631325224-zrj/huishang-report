@@ -353,6 +353,12 @@ canvas { display: block; }
   </div>
   </div>
 
+  <!-- 诊断面板 -->
+  <div id="diag-panel" style="display:none; margin-top:12px; padding:12px; background:#f8f9fa; border-radius:8px; font-size:11px; font-family:monospace; white-space:pre-wrap; word-break:break-all; border:1px solid #e0e0e0;"></div>
+  <div style="text-align:center; margin-top:12px; margin-bottom:8px;">
+    <button onclick="window.showDiagnostics()" style="font-size:12px; padding:6px 16px; color:#666; background:#fff; border:1px solid #ccc; border-radius:6px; cursor:pointer;">🔍 显示诊断数据</button>
+  </div>
+
   <div class="footer">
     徽商故里经营报表 · 收银系统直连 · 红色▲=增长 &nbsp;|&nbsp; 绿色▼=下降 &nbsp;|&nbsp; — = 无数据或系统未上线 &nbsp;|&nbsp; 数据延迟约30分钟
   </div>
@@ -560,8 +566,8 @@ async function queryRevenue(settleDate, dateType, centerId, shopId) {
 // ── 使用 getBusinessSituation beginDate/endDate 查询整月纯收 ──
 // 与日数据相同 API、相同字段（income.incomeTotal）
 // settleDate+dateType=单日数据，需用 beginDate/endDate 查整月
-// ── 月度纯收：使用 settleDate（月第一天）+ dateType=3（月维度），1次请求/门店 ──
-// dateType: 1=日, 2=周, 3=月 ← 之前误用了 dateType=2(周)，已修正为 dateType=3
+// ── 月度纯收：使用 settleDate（月第一天）+ dateType=2（营业日维度），1次请求/门店 ──
+// dateType: 1=自然日, 2=营业日 ← 使用 dateType=2（营业日口径更准确）
 // 辅助函数
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 async function fetchWithTimeout(url, timeoutMs = 10000) {
@@ -588,20 +594,23 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   const shopNameResolved = shopInfo?.name || `门店${sid}`;
 
   let income = 0;
+  let apiStatus = 'unknown';
+  let rawResponse = null;
   try {
-    // 统一使用 getBusinessSituation dateType=2（营业日月汇总）
-    // 探测验证：2025历史年 dateType=2+settleDate=YYYY-MM-01 返回整月汇总（约5万/月/店），非0
-    // dateType=1 和 dateType=2 对同一settleDate返回值相同，dateType=2 更准确（营业日口径）
+    // 使用 getBusinessSituation settleDate + dateType=2 查询整月汇总
+    // dateType=2 按营业日维度查询，对 YYYY-MM-01 返回整月数据
     const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=2`;
     const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 12000);
+    const tid = setTimeout(() => controller.abort(), 15000);
     const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
       signal: controller.signal,
     });
     clearTimeout(tid);
+    apiStatus = res.status;
     const json = await res.json();
+    rawResponse = json;
     const incomeObj = json?.data?.List?.income;
     const bd = json?.data?.List?.businessData ?? {};
     if (incomeObj?.incomeTotal !== undefined) {
@@ -609,14 +618,28 @@ async function queryMonthBillList(year, month, centerId, shopId) {
     } else if (bd.last !== undefined) {
       income = parseFloat(bd.last) || 0;
     }
+    // 诊断：如果 income 为0但 API 返回成功，记录详细响应
+    // ⚠️ 诊断代码：记录所有响应的原始数据，用于排查2025-06数据问题
+    const incomeObj = json?.data?.List?.income;
+    const bd = json?.data?.List?.businessData ?? {};
+    console.log(`[API诊断 ${monthStr} ${shopNameResolved}] incomeTotal=${incomeObj?.incomeTotal}, bd.last=${bd.last}, full_response=`, JSON.stringify(json).slice(0, 500));
+    if (incomeObj?.incomeTotal !== undefined) {
+      income = parseFloat(incomeObj.incomeTotal) || 0;
+    } else if (bd.last !== undefined) {
+      income = parseFloat(bd.last) || 0;
+    }
+    if (income === 0 && res.status === 200) {
+      console.warn(`[月度汇总 警告] ${monthStr} ${shopNameResolved}: income=0, API状态=${res.status}, 响应=`, JSON.stringify(json?.data?.List?.income || json?.data?.List?.businessData || json));
+    }
   } catch (e) {
+    apiStatus = `error: ${e.message}`;
     console.warn(`[月度汇总 失败] ${monthStr} 门店${shopId}:`, e.message);
   }
 
   const shops = { [sid]: { name: shopNameResolved, income } };
-  const result = { totalIncome: income, shops, monthStr };
+  const result = { totalIncome: income, shops, monthStr, apiStatus, rawResponse };
   SHOP_DATA_CACHE[cacheKey] = result;
-  console.log(`[月度汇总] ${monthStr} ${shopNameResolved}: 纯收=${income.toFixed(2)}`);
+  console.log(`[月度汇总] ${monthStr} ${shopNameResolved}: 纯收=${income.toFixed(2)}, API状态=${apiStatus}`);
   return result;
 }
 
@@ -895,7 +918,7 @@ function lsLoadYearlyData() {
 // ══════════════════════════════════════════════════════════
 // 清理旧缓存（v10→v11：历史年改回 getBusinessSituation dateType=2，探测证实2025年有效；清除v10逐天累加错误数据及预加载双写Bug数据）
 // ══════════════════════════════════════════════════════════
-const LS_CACHE_VERSION = 'v11';  // v11：历史年统一用 getBusinessSituation dateType=2（与当年同逻辑），修复预加载双写Bug
+const LS_CACHE_VERSION = 'v17';  // v17：修复预加载月份0收入时不保存缓存的Bug，添加API诊断日志
 
 function lsClearOldCache() {
   // 检查是否需要清理旧缓存
@@ -979,14 +1002,14 @@ async function loadAllData() {
   updateProgress(10, '恢复本地缓存…');
   lsRestoreMonths(); // 填充 loadedMonths
 
-  // 初始化数据结构
-  const monthlyData = {};
-  const yearlyData  = {};
-  const shopMonthlyData = {};
-  const shopYearlyData  = {};
+  // 初始化数据结构（直接使用 DATA 对象，确保所有函数操作同一引用）
+  const monthlyData = DATA.monthlyData;
+  const yearlyData  = DATA.yearlyData;
+  const shopMonthlyData = DATA.shopMonthlyData;
+  const shopYearlyData  = DATA.shopYearlyData;
   ALL_SHOPS.forEach(s => {
-    shopMonthlyData[s.centerId] = {};
-    shopYearlyData[s.centerId]  = {};
+    if (!shopMonthlyData[s.centerId]) shopMonthlyData[s.centerId] = {};
+    if (!shopYearlyData[s.centerId]) shopYearlyData[s.centerId] = {};
   });
 
   // 从 localStorage 加载已缓存的历史月份数据
@@ -1073,11 +1096,7 @@ async function loadAllData() {
   const monthTasks = shopIds.map(shopId => () => queryMonthBillList(curYear, curMonth, API_CONFIG.centerId, shopId));
   const monthResults = await batchQuery(monthTasks, 5, prog => updateProgress(68 + prog * 0.3, `当月账单 ${prog}%…`));
 
-  // 立即同步月度数据到全局 DATA（渐进式更新 UI）
-  DATA.monthlyData = monthlyData;
-  DATA.yearlyData = yearlyData;
-  DATA.shopMonthlyData = shopMonthlyData;
-  DATA.shopYearlyData = shopYearlyData;
+  // monthlyData/yearlyData/shopMonthlyData/shopYearlyData 已经是 DATA 的引用，无需再赋值
   render();
   
   // 清零并重新填入当前月（避免日维度累加误差）
@@ -1122,16 +1141,25 @@ async function loadAllData() {
   console.log('[门店月数据] 大蜀山:', shopMonthlyData[247421]);
 
   // ══════════════════════════════════════════════════════════
-  // 第三阶段：静默预加载近 6 个月（保证常见环比对比秒开，无需等待）
+  // 第三阶段：静默预加载从上线月到当前月的所有未加载月份
+  // 修复：加载所有历史月份，而非仅近6个月
   // ══════════════════════════════════════════════════════════
   const preloadTargets = [];
-  for (let i = 1; i <= 6; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const py = d.getFullYear(), pm = d.getMonth() + 1;
-    const pk = `${py}-${p(pm)}`;
-    const isOnline = py > API_CONFIG.onlineYear || (py === API_CONFIG.onlineYear && pm >= API_CONFIG.onlineMonth);
-    if (isOnline && !loadedMonths.has(pk)) preloadTargets.push([py, pm, pk]);
+  // 从上线月份开始，遍历到当前月份
+  let preloadY = API_CONFIG.onlineYear;
+  let preloadM = API_CONFIG.onlineMonth;
+  const endY = curYear;
+  const endM = curMonth;
+  while (preloadY < endY || (preloadY === endY && preloadM <= endM)) {
+    const pk = `${preloadY}-${p(preloadM)}`;
+    const isOnline = preloadY > API_CONFIG.onlineYear || (preloadY === API_CONFIG.onlineYear && preloadM >= API_CONFIG.onlineMonth);
+    if (isOnline && !loadedMonths.has(pk)) {
+      preloadTargets.push([preloadY, preloadM, pk]);
+    }
+    preloadM++;
+    if (preloadM > 12) { preloadM = 1; preloadY++; }
   }
+  console.log(`[预加载] 目标月份: ${preloadTargets.map(t => t[2]).join(', ')}`);
 
   // 批量并发预加载（所有月份并行，加速初始化）
   const preloadPromises = preloadTargets.map(async ([py, pm, pk]) => {
@@ -1167,14 +1195,13 @@ async function loadAllData() {
           });
         }
       });
-      if (Object.keys(shopTmp).length > 0) {
-        lsSaveMonth(pk, monthlyData[pk], shopTmp);
-        loadedMonths.add(pk);
-        lsSaveMeta();
-        // ✅ 预加载月份写入全局 DATA 后立即触发增量渲染，年报数据渐进式呈现
-        render();
-      }
-      console.log(`[预加载 ${pk}] 完成: ${Object.keys(shopTmp).length} 门店`);
+      console.log(`[预加载 ${pk}] 完成: ${Object.keys(shopTmp).length} 门店, 总纯收=${monthlyData[pk]?.toFixed(2)}`);
+      // ⚠️ 即使所有门店收入都是0，也要保存月份到缓存（避免重复加载）
+      lsSaveMonth(pk, monthlyData[pk] || 0, shopTmp);
+      loadedMonths.add(pk);
+      lsSaveMeta();
+      // ✅ 预加载月份写入全局 DATA 后立即触发增量渲染，年报数据渐进式呈现
+      render();
     } catch (e) {
       console.warn(`[预加载失败] ${pk}`, e.message);
     }
@@ -1187,6 +1214,15 @@ async function loadAllData() {
   });
 
   updateProgress(100, '完成');
+  // 同步 dailyData 到 DATA（monthlyData/yearlyData 等已经是 DATA 的引用）
+  DATA.dailyData = dailyData;
+  DATA.shopDailyData = shopDailyData;
+  DATA.summary = {
+    today: dailyData[today] || 0,
+    currentMonth: monthlyData[curMonthKey] || 0,
+    currentYear: yearlyData[String(curYear)] || 0,
+  };
+
   return {
     success: true,
     generatedAt: now.toISOString(),
@@ -1203,11 +1239,7 @@ async function loadAllData() {
     shopDailyData,
     shopMonthlyData,
     shopYearlyData,
-    summary: {
-      today: dailyData[today] || 0,
-      currentMonth: monthlyData[curMonthKey] || 0,
-      currentYear: yearlyData[String(curYear)] || 0,
-    },
+    summary: DATA.summary,
   };
 }
 
@@ -1224,6 +1256,15 @@ const calcChange = (a, b) => {
   return { diff: a - b, pct: (a - b) / b * 100 };
 };
 const prevYearDate = d => { const x = new Date(d); x.setFullYear(x.getFullYear() - 1); return x.toISOString().slice(0, 10); };
+
+// 获取当前筛选条件下的门店列表（用于 ensureYearData 增量渲染）
+function getFilteredShops() {
+  return ALL_SHOPS.filter(s => {
+    if (STATE.region && s.region !== STATE.region) return false;
+    if (STATE.shop && s.name !== STATE.shop) return false;
+    return true;
+  });
+}
 
 // ════════ 按需加载历史月份数据 ════════
 let loadingMonths = new Set();   // 正在加载中
@@ -1256,8 +1297,10 @@ async function ensureMonthData(year, month) {
       }, 200);
     });
   }
-  console.log(`[ensureMonthData 开始] ${key}，发起 API 请求（${shopIds.length} 家门店）…`);
+  console.log(`[ensureMonthData 开始] ${key}...`);
   loadingMonths.add(key);
+  const shopIds = ALL_SHOPS.map(s => s.centerId);
+  console.log(`[ensureMonthData 开始] ${key}，发起 API 请求（${shopIds.length} 家门店）…`);
   const monthName = `${year}年${MONTH_NAMES[month - 1]}`;
   const loadingEl = document.getElementById('month-loading');
   if (loadingEl) {
@@ -1266,7 +1309,6 @@ async function ensureMonthData(year, month) {
   }
   console.log(`[加载历史月份] ${key}...`);
   try {
-    const shopIds = ALL_SHOPS.map(s => s.centerId);
     const settleDate = `${year}-${p(month)}-01`;
 
     // ── 先清零该月所有数据，防止重复累加 ──
@@ -1286,11 +1328,10 @@ async function ensureMonthData(year, month) {
       }
     });
 
-    // ── 使用账单明细 API（getserialdata）获取整月数据 ──
-    // 历史年：逐天查询（8天/批，300ms间隔），当年：getBusinessSituation dateType=3 单次
-    const isHist = year < new Date().getFullYear(); // 保留变量（不影响逻辑，仅用于日志）
+    // ── 使用 getBusinessSituation dateType=2 查询整月纯收 ──
+    // 历史年和当年统一逻辑：dateType=2 + settleDate=YYYY-MM-01 返回整月汇总
     const tasks = shopIds.map(sid => () => queryMonthBillList(year, month, API_CONFIG.centerId, sid));
-    console.log(`[${key}] 发起账单明细请求: ${tasks.length} 个门店 (历史=${isHist})`);
+    console.log(`[${key}] 发起月度汇总请求: ${tasks.length} 个门店`);
     if (loadingEl) loadingEl.textContent = `↻ 加载 ${monthName}… (0/${tasks.length})`;
     let doneCount = 0;
     const wrappedTasks = tasks.map(t => () => t().then(r => {
@@ -1298,10 +1339,12 @@ async function ensureMonthData(year, month) {
       if (loadingEl) loadingEl.textContent = `↻ 加载 ${monthName}… (${doneCount}/${tasks.length})`;
       return r;
     }));
-    const results = await batchQuery(wrappedTasks, 8);
+    const results = await batchQuery(wrappedTasks, 10);
 
     const shopMonthTmp = {};
-    const guanAnSid = 247415;
+    let successCount = 0;
+    let failCount = 0;
+    let zeroIncomeCount = 0;
     results.forEach(result => {
       if (result?.shops) {
         Object.entries(result.shops).forEach(([sid, shopData]) => {
@@ -1314,29 +1357,25 @@ async function ensureMonthData(year, month) {
             DATA.shopMonthlyData[n][key] = (DATA.shopMonthlyData[n][key] || 0) + shopData.income;
             DATA.shopYearlyData[n][yKey] = (DATA.shopYearlyData[n][yKey] || 0) + shopData.income;
             shopMonthTmp[n] = (shopMonthTmp[n] || 0) + shopData.income;
-            // 🔍 诊断：广安门店(247415)每月明细
-            if (n === guanAnSid) {
-              console.log(`[广安 ${key}] API返回纯收=${shopData.income.toFixed(2)}`);
-            }
+            successCount++;
+          } else {
+            zeroIncomeCount++;
           }
         });
+      } else {
+        failCount++;
       }
     });
 
-    console.log(`[${key} 账单API聚合] 总纯收: ${DATA.monthlyData[key].toFixed(2)}, 参与门店数: ${Object.keys(shopMonthTmp).length}`);
-    // 🔍 诊断：广安2025年汇总（逐月累加）
-    if (key.startsWith('2025')) {
-      console.log(`[广安2025汇总] 当前年度累计=${(DATA.shopYearlyData[guanAnSid]?.['2025'] || 0).toFixed(2)}, 月份=${key}`);
-    }
+    console.log(`[${key} 月度汇总] 总纯收: ${DATA.monthlyData[key].toFixed(2)}, 参与门店数: ${Object.keys(shopMonthTmp).length}, 成功=${successCount}, 零收入=${zeroIncomeCount}, 失败=${failCount}`);
 
     // ── 写入 localStorage，下次访问直接用缓存，无需再请求 API ──
     lsSaveMonth(key, DATA.monthlyData[key], shopMonthTmp);
+    loadedMonths.add(key); // ✅ 标记为已完整加载
     lsSaveMeta();
     console.log(`[加载完成] ${key}:`, DATA.monthlyData[key], '(已写入本地缓存)');
-    loadedMonths.add(key); // ✅ 标记为已完整加载
-    // 只在没有其他月份正在加载时才触发 render（批量加载时等所有完成后统一渲染，避免频繁重绘）
-    // 年报批量加载中由 ensureYearData 的 Promise.all 统一触发，此处跳过
-    if (loadingMonths.size === 0 && !_yearBatchLoading) {
+    // 非年报批量加载模式下，触发渲染
+    if (!_yearBatchLoading) {
       render();
     }
   } catch (e) {
@@ -1618,7 +1657,10 @@ function bindEvents() {
     contentEl.innerHTML = '⏳ 探测中，请稍候…';
 
     const centerId = 247412;
-    const shopId = 247415; // 广安门店
+    const testShops = [
+      { name: '广安门店', shopId: 247415 },
+      { name: '朝阳门店', shopId: 247413 },
+    ];
 
     // 根据API文档（https://doc.wuuxiang.com/showdoc/web/#/46/14375）：
     // dateType=1 按自然日查询（需逐天累加）
@@ -1630,6 +1672,8 @@ function bindEvents() {
       { label: 'dateType=2 + settleDate=2025-09-15', dateType: '2', settleDate: '2025-09-15', note: '营业日（月中查）' },
       { label: 'dateType=1 + settleDate=2025-10-01', dateType: '1', settleDate: '2025-10-01', note: '自然日（10月1日）' },
       { label: 'dateType=2 + settleDate=2025-10-01', dateType: '2', settleDate: '2025-10-01', note: '营业日（10月汇总？）' },
+      { label: 'dateType=2 + settleDate=2026-05-01', dateType: '2', settleDate: '2026-05-01', note: '营业日（2026年5月汇总）' },
+      { label: 'dateType=1 + settleDate=2026-05-01', dateType: '1', settleDate: '2026-05-01', note: '自然日（2026年5月1日）' },
     ];
 
     let html = '<table style="width:auto;border-collapse:collapse;margin-top:8px">';
@@ -1640,35 +1684,38 @@ function bindEvents() {
     html += '<td style="padding:6px 12px;border:1px solid #ddd">HTTP</td>';
     html += '<td style="padding:6px 12px;border:1px solid #ddd">备注</td></tr>';
 
-    for (const t of tests) {
-      try {
-        const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${t.settleDate}&dateType=${t.dateType}`;
-        const controller = new AbortController();
-        const tid = setTimeout(() => controller.abort(), 12000);
-        const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
-          signal: controller.signal
-        });
-        clearTimeout(tid);
-        const json = await res.json();
-        const income = parseFloat(json?.data?.List?.income?.incomeTotal) || 0;
-        const bd = json?.data?.List?.businessData ?? {};
-        const last = parseFloat(bd.last) || 0;
-        let note = '';
-        if (income > 5000) note = '🔥 接近月汇总';
-        else if (income > 100) note = '可能日数据';
-        else note = '单日？';
-        const ok = income > 0;
-        html += `<tr style="background:${ok ? '#f0fff4' : '#fff5f5'}">
-          <td style="padding:6px 12px;border:1px solid #ddd;font-weight:600;font-size:11px">${t.label}</td>
-          <td style="padding:6px 12px;border:1px solid #ddd;color:#666;font-size:10px">${t.note}</td>
-          <td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-weight:700;color:${ok ? '#27ae60' : '#c0392b'}">${income > 0 ? '✅ ' + income.toLocaleString('zh-CN', {minimumFractionDigits:2}) : '❌ 0'}</td>
-          <td style="padding:6px 12px;border:1px solid #ddd">${res.status}</td>
-          <td style="padding:6px 12px;border:1px solid #ddd;font-size:10px;color:#888">${note}</td>
-        </tr>`;
-      } catch(e) {
-        html += `<tr><td style="padding:6px 12px;border:1px solid #ddd">${t.label}</td><td colspan="4" style="padding:6px 12px;border:1px solid #ddd;color:#c0392b">❌ ${e.message}</td></tr>`;
+    for (const shop of testShops) {
+      html += `<tr style="background:#8e44ad;color:#fff"><td colspan="5" style="padding:6px 12px;border:1px solid #ddd;font-weight:700">${shop.name} (shopId=${shop.shopId})</td></tr>`;
+      for (const t of tests) {
+        try {
+          const qs = `centerId=${centerId}&shopId=${shop.shopId}&settleDate=${t.settleDate}&dateType=${t.dateType}`;
+          const controller = new AbortController();
+          const tid = setTimeout(() => controller.abort(), 12000);
+          const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
+            signal: controller.signal
+          });
+          clearTimeout(tid);
+          const json = await res.json();
+          const income = parseFloat(json?.data?.List?.income?.incomeTotal) || 0;
+          const bd = json?.data?.List?.businessData ?? {};
+          const last = parseFloat(bd.last) || 0;
+          let note = '';
+          if (income > 5000) note = '🔥 接近月汇总';
+          else if (income > 100) note = '可能日数据';
+          else note = '单日？';
+          const ok = income > 0;
+          html += `<tr style="background:${ok ? '#f0fff4' : '#fff5f5'}">
+            <td style="padding:6px 12px;border:1px solid #ddd;font-weight:600;font-size:11px">${t.label}</td>
+            <td style="padding:6px 12px;border:1px solid #ddd;color:#666;font-size:10px">${t.note}</td>
+            <td style="padding:6px 12px;border:1px solid #ddd;text-align:right;font-weight:700;color:${ok ? '#27ae60' : '#c0392b'}">${income > 0 ? '✅ ' + income.toLocaleString('zh-CN', {minimumFractionDigits:2}) : '❌ 0'}</td>
+            <td style="padding:6px 12px;border:1px solid #ddd">${res.status}</td>
+            <td style="padding:6px 12px;border:1px solid #ddd;font-size:10px;color:#888">${note}</td>
+          </tr>`;
+        } catch(e) {
+          html += `<tr><td style="padding:6px 12px;border:1px solid #ddd">${t.label}</td><td colspan="4" style="padding:6px 12px;border:1px solid #ddd;color:#c0392b">❌ ${e.message}</td></tr>`;
+        }
       }
     }
     html += '</table>';
@@ -2008,7 +2055,7 @@ function ensureYearData(dimSnapshot, onReady) {
   if (allLoaded) return false; // 数据已就绪，无需异步等待
   if (_yearBatchLoading) return true; // 已有加载任务在跑，不再重复启动
 
-  // 按月份顺序串行加载（历史年每月需31次逐天请求，串行避免并发爆炸）
+  // 构建月份加载队列（只包含未加载的月份）
   const monthQueue = [];
   for (let m = yOnlyMinMonth; m <= yOnlyMaxMonth; m++) {
     if (!loadedMonths.has(`${STATE.yearOnly}-${String(m).padStart(2,'0')}`)) monthQueue.push([STATE.yearOnly, m]);
@@ -2017,6 +2064,7 @@ function ensureYearData(dimSnapshot, onReady) {
     if (!loadedMonths.has(`${STATE.yearPrev}-${String(m).padStart(2,'0')}`)) monthQueue.push([STATE.yearPrev, m]);
   }
   const totalMonths = monthQueue.length;
+  if (totalMonths === 0) return false; // 全部已加载
 
   // 显示加载中状态
   const loadingEl = document.getElementById('month-loading');
@@ -2025,85 +2073,66 @@ function ensureYearData(dimSnapshot, onReady) {
     loadingEl.textContent = `↻ 加载年报数据（0/${totalMonths} 个月）…`;
   }
 
-  _yearBatchLoading = true; // 禁止 ensureMonthData 单独触发 render
+  _yearBatchLoading = true;
 
-  // ── 串行执行月份队列，同时最多2个月并发，确保每个 Promise 都能正确 resolve/reject ──
-  const YEAR_MONTH_CONCURRENCY = 2;
+  // ── 并发加载月份队列，3个月并发，每完成一个月触发增量渲染 ──
+  const YEAR_MONTH_CONCURRENCY = 3;
   let doneMonths = 0;
+  let hasError = false;
+
   const runQueue = async () => {
-    try {
-      console.log('[ensureYearData runQueue] 启动，月份队列:', monthQueue.length, '个');
-      const runners = [];
-      for (let i = 0; i < YEAR_MONTH_CONCURRENCY; i++) {
-        runners.push((async () => {
-          while (true) {
-            // 原子操作：先检查队列是否为空，再 shift，防止返回 undefined
-            const item = monthQueue.shift();
-            if (!item) break;
-            const [y, m] = item;
-            const key = `${y}-${String(m).padStart(2,'0')}`;
-            try {
-              console.log(`[ensureYearData] Runner-${i} 开始加载 ${key}`);
-              await ensureMonthData(y, m);
-              doneMonths++;
-              console.log(`[ensureYearData] Runner-${i} 完成 ${key} (${doneMonths}/${totalMonths})`);
-              if (loadingEl) loadingEl.textContent = `↻ 加载年报数据（${doneMonths}/${totalMonths} 个月）…`;
-            } catch (e) {
-              console.error(`[ensureYearData] Runner-${i} 异常 ${key}:`, e.message);
-              doneMonths++; // 仍然计入，防止永远卡在同一个月份
+    const runners = [];
+    for (let i = 0; i < YEAR_MONTH_CONCURRENCY; i++) {
+      runners.push((async () => {
+        while (true) {
+          const item = monthQueue.shift();
+          if (!item) break;
+          const [y, m] = item;
+          const key = `${y}-${String(m).padStart(2,'0')}`;
+          try {
+            await ensureMonthData(y, m);
+            doneMonths++;
+            if (loadingEl) loadingEl.textContent = `↻ 加载年报数据（${doneMonths}/${totalMonths} 个月）…`;
+            // 每完成一个月，触发一次增量渲染（渐进式呈现）
+            if (STATE.dim === dimSnapshot) {
+              renderSummary(dimSnapshot);
+              renderTable(getFilteredShops(), dimSnapshot, false);
             }
+          } catch (e) {
+            console.error(`[ensureYearData] 加载失败 ${key}:`, e.message);
+            hasError = true;
+            doneMonths++;
           }
-          console.log(`[ensureYearData] Runner-${i} 退出`);
-        })());
-      }
-      await Promise.all(runners);
-      console.log('[ensureYearData runQueue] 全部 runner 完成');
-    } catch (e) {
-      console.error('[ensureYearData runQueue] 整体异常:', e);
+        }
+      })());
+    }
+    await Promise.all(runners);
+  };
+
+  // 统一完成处理（成功或失败都触发回调）
+  const onComplete = () => {
+    _yearBatchLoading = false;
+    if (loadingEl) { loadingEl.style.display = 'none'; loadingEl.textContent = ''; }
+    // 无论 dim 是否变化，都必须触发最终渲染（否则用户永远看不到结果）
+    if (dimSnapshot === 'year') {
+      onReady();
     }
   };
 
-  console.log('[ensureYearData] 开始异步加载，月份队列长度:', monthQueue.length);
-  const queuePromise = runQueue();
-  console.log('[ensureYearData] runQueue() 已启动，返回 Promise:', queuePromise);
-
-  queuePromise.then(() => {
-    console.log('[ensureYearData ✅ Promise.resolve] runQueue 完成');
-  }).catch(err => {
-    console.error('[ensureYearData ❌ Promise.reject] runQueue 异常:', err);
+  runQueue().then(onComplete).catch(err => {
+    console.error('[ensureYearData] 整体异常:', err);
+    onComplete();
   });
 
-  // 用 Promise.resolve 包装，确保一定是 Promise，不会出现意外情况
-  Promise.resolve(queuePromise).then(() => {
-    _yearBatchLoading = false;
-    if (loadingEl) loadingEl.style.display = 'none';
-    console.log('[ensureYearData ✅ 完成] 触发回调，重新渲染表格');
-    // 用捕获的 dimSnapshot 判断是否仍在年报模式，防止加载期间用户切走后误渲染年报
-    if (STATE.dim === dimSnapshot) {
-      onReady(); // 加载完毕后触发完整渲染
-    } else {
-      console.log('[ensureYearData] 加载完成，但 STATE.dim 已切换为', STATE.dim, '，跳过年报回调');
-    }
-  }).catch(err => {
-    // 确保即使某个月份加载失败，表格也能显示（即使数据不完整）
-    _yearBatchLoading = false;
-    if (loadingEl) loadingEl.style.display = 'none';
-    console.error('[ensureYearData ❌ 异常]', err);
-    if (STATE.dim === dimSnapshot) {
-      onReady(); // 强制渲染，即使数据不完整也要显示
-    }
-  });
-
-  // 安全超时：60秒后强制渲染，防止永远卡死
+  // 安全超时：90秒后强制完成
   setTimeout(() => {
     if (_yearBatchLoading) {
-      console.warn('[ensureYearData ⚠️ 超时] 60秒未完成，强制重置状态并渲染');
-      _yearBatchLoading = false;
-      if (loadingEl) loadingEl.style.display = 'none';
-      if (STATE.dim === dimSnapshot) onReady();
+      console.warn('[ensureYearData] 超时强制完成');
+      onComplete();
     }
-  }, 60000);
-  return true; // 正在异步加载
+  }, 90000);
+
+  return true;
 }
 
 // ════════ 渲染汇总卡片 ════════
@@ -2266,6 +2295,10 @@ function renderCharts(dim) {
   const labels12 = entries.map(([k]) => { const [y, m] = k.split('-'); return `${y}年${m}月`; });
   const values12 = entries.map(([, v]) => v || 0);
 
+  // 诊断：打印折线图数据
+  console.log('[renderCharts 折线图] entries:', entries.map(([k,v]) => `${k}=${v?.toFixed?.(2) ?? v}`).join(', '));
+  console.log('[renderCharts 折线图] DATA.monthlyData 键数:', Object.keys(DATA?.monthlyData || {}).length);
+
   const ctxLine = document.getElementById('chartLine').getContext('2d');
   chartLine = new Chart(ctxLine, {
     type: 'line',
@@ -2288,20 +2321,24 @@ function renderCharts(dim) {
 
 // ════════ 渲染表格 ════════
 function renderTable(shops, dim, loading) {
-  const currentThA = document.getElementById('th-a')?.textContent || '';
-  const isYearMode = dim === 'year';
-  // 防止月报/日报的 render 覆盖年报模式的表头（年报 render 先执行，月报 DOMContentLoaded 后执行）
-  const isAlreadyYear = currentThA.includes('年') && !currentThA.includes('-') && dim !== 'year';
-  if (isAlreadyYear && dim !== 'year') {
-    dim = 'year'; // 强制保持年报模式，不被其他 render 覆盖
-  }
+  // 表头根据传入的 dim 参数设置，不依赖当前 DOM 状态
+  // 避免不同维度切换时的表头错乱
 
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
 
-  // 加载中时只显示一行提示，表头正常设置（用户需要看到正确的表头才能理解提示含义）
+  // 加载中时只显示一行提示，表头根据当前维度设置
   if (loading) {
-    const labelA = `${STATE.yearOnly}年`, labelB = `${STATE.yearPrev}年`;
+    let labelA = '', labelB = '';
+    if (dim === 'month') {
+      labelA = `${STATE.yearA}年${MONTH_NAMES[STATE.monthA - 1]}`;
+      labelB = `${STATE.yearB}年${MONTH_NAMES[STATE.monthB - 1]}`;
+    } else if (dim === 'day') {
+      labelA = STATE.dateA;
+      labelB = STATE.compare === 'yoy' ? prevYearDate(STATE.dateA) : STATE.dateB;
+    } else {
+      labelA = `${STATE.yearOnly}年`; labelB = `${STATE.yearPrev}年`;
+    }
     document.getElementById('th-a').textContent = labelA;
     document.getElementById('th-b').textContent = labelB;
     const tr = document.createElement('tr');
@@ -2473,15 +2510,22 @@ async function render() {
     console.log('[render 年报分支] 触发 ensureYearData，预加载月份数:', [...loadedMonths].length);
     // 立即渲染表头和表格（不等待全部数据加载完），确保用户点击年报后表头立即正确
     renderSummary(STATE.dim);
-    renderTable(shops, STATE.dim, true /*loading=*/);
     renderCharts(STATE.dim);
     // 后台异步加载数据，每完成一个月就触发一次增量渲染（渐进式呈现）
-    ensureYearData(STATE.dim, () => {
+    const needsLoading = ensureYearData(STATE.dim, () => {
       console.log('[ensureYearData 回调] 调用 renderTable 最终渲染，门店数:', shops.length);
       renderSummary(STATE.dim);
       renderTable(shops, STATE.dim, false);
       renderCharts(STATE.dim);
     });
+    // 如果数据已全部加载（ensureYearData 返回 false），立即渲染表格
+    if (!needsLoading) {
+      console.log('[render 年报] 数据已就绪，立即渲染');
+      renderTable(shops, STATE.dim, false);
+      return;
+    }
+    // 正在异步加载，显示加载状态
+    renderTable(shops, STATE.dim, true /*loading=*/);
     return; // 已启动异步加载，不再阻塞
   }
 
@@ -2738,6 +2782,72 @@ window.debugHistAPI = async function(monthStr = '2025-09', shopId = 247415) {
 
   console.log(`\n>>> 请在商户后台(sly.tcsl.com.cn)查询广安门店 ${monthStr} 单月纯收，与以上数据对比`);
   console.log(`    正确答案已知：2025全年 = 9,644,444.31`);
+};
+
+// ════════ 诊断面板 ════════
+window.showDiagnostics = function() {
+  const panel = document.getElementById('diag-panel');
+  if (!panel) return;
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  if (panel.style.display === 'none') return;
+
+  let html = '═══ 诊断数据 ═══\n\n';
+
+  // monthlyData
+  html += '[DATA.monthlyData]\n';
+  const mKeys = Object.keys(DATA?.monthlyData || {}).sort();
+  if (mKeys.length === 0) {
+    html += '  (空)\n';
+  } else {
+    mKeys.forEach(k => {
+      const v = DATA.monthlyData[k];
+      html += `  ${k}: ${typeof v === 'number' ? v.toFixed(2) : v}\n`;
+    });
+  }
+  html += '\n';
+
+  // yearlyData
+  html += '[DATA.yearlyData]\n';
+  const yKeys = Object.keys(DATA?.yearlyData || {}).sort();
+  if (yKeys.length === 0) {
+    html += '  (空)\n';
+  } else {
+    yKeys.forEach(k => {
+      const v = DATA.yearlyData[k];
+      html += `  ${k}: ${typeof v === 'number' ? v.toFixed(2) : v}\n`;
+    });
+  }
+  html += '\n';
+
+  // shopYearlyData (只显示前3个门店)
+  html += '[DATA.shopYearlyData 样本]\n';
+  const shopKeys = Object.keys(DATA?.shopYearlyData || {}).slice(0, 3);
+  if (shopKeys.length === 0) {
+    html += '  (空)\n';
+  } else {
+    shopKeys.forEach(sid => {
+      const shop = ALL_SHOPS.find(s => s.centerId === Number(sid));
+      const name = shop?.name || `门店${sid}`;
+      const years = DATA.shopYearlyData[sid];
+      html += `  ${name} (${sid}):\n`;
+      Object.entries(years || {}).forEach(([y, v]) => {
+        html += `    ${y}: ${typeof v === 'number' ? v.toFixed(2) : v}\n`;
+      });
+    });
+  }
+  html += '\n';
+
+  // loadedMonths
+  html += `[loadedMonths] ${loadedMonths.size} 个:\n`;
+  html += '  ' + [...loadedMonths].sort().join(', ') + '\n\n';
+
+  // STATE
+  html += '[STATE]\n';
+  html += `  dim: ${STATE.dim}\n`;
+  html += `  yearOnly: ${STATE.yearOnly}, yearPrev: ${STATE.yearPrev}\n`;
+  html += `  compare: ${STATE.compare}\n`;
+
+  panel.textContent = html;
 };
 
 window.addEventListener('DOMContentLoaded', async () => {
