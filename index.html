@@ -620,14 +620,7 @@ async function queryMonthBillList(year, month, centerId, shopId) {
     }
     // 诊断：如果 income 为0但 API 返回成功，记录详细响应
     // ⚠️ 诊断代码：记录所有响应的原始数据，用于排查2025-06数据问题
-    const incomeObj = json?.data?.List?.income;
-    const bd = json?.data?.List?.businessData ?? {};
     console.log(`[API诊断 ${monthStr} ${shopNameResolved}] incomeTotal=${incomeObj?.incomeTotal}, bd.last=${bd.last}, full_response=`, JSON.stringify(json).slice(0, 500));
-    if (incomeObj?.incomeTotal !== undefined) {
-      income = parseFloat(incomeObj.incomeTotal) || 0;
-    } else if (bd.last !== undefined) {
-      income = parseFloat(bd.last) || 0;
-    }
     if (income === 0 && res.status === 200) {
       console.warn(`[月度汇总 警告] ${monthStr} ${shopNameResolved}: income=0, API状态=${res.status}, 响应=`, JSON.stringify(json?.data?.List?.income || json?.data?.List?.businessData || json));
     }
@@ -918,7 +911,7 @@ function lsLoadYearlyData() {
 // ══════════════════════════════════════════════════════════
 // 清理旧缓存（v10→v11：历史年改回 getBusinessSituation dateType=2，探测证实2025年有效；清除v10逐天累加错误数据及预加载双写Bug数据）
 // ══════════════════════════════════════════════════════════
-const LS_CACHE_VERSION = 'v17';  // v17：修复预加载月份0收入时不保存缓存的Bug，添加API诊断日志
+const LS_CACHE_VERSION = 'v18';  // v18: 修复重复变量声明导致页面卡住的Bug
 
 function lsClearOldCache() {
   // 检查是否需要清理旧缓存
