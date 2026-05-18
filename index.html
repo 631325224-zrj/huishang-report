@@ -595,13 +595,25 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   const shopInfo = ALL_SHOPS.find(s => String(s.centerId) === sid);
   const shopNameResolved = shopInfo?.name || `门店${sid}`;
 
+  // 历史月份用 beginDate/endDate 区间查询（dateType=3 对历史月只返回单日数据）
+  const curYear = new Date().getFullYear();
+  const isHistorical = year < curYear;
+
   let income = 0;
   let apiStatus = 'unknown';
   let rawResponse = null;
   try {
-    // 使用 getBusinessSituation settleDate + dateType=2 查询整月汇总
-    // dateType=2 按营业日维度查询，对 YYYY-MM-01 返回整月数据
-    const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=2`;
+    let qs;
+    if (isHistorical) {
+      // 2025年及历史：用 beginDate/endDate 查整月
+      const beginDate = `${monthStr}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
+      qs = `centerId=${centerId}&shopId=${shopId}&beginDate=${beginDate}&endDate=${endDate}&dateType=1`;
+    } else {
+      // 2026年当年：用 settleDate+dateType=3（月维度）
+      qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=3`;
+    }
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), 15000);
     const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
@@ -620,11 +632,12 @@ async function queryMonthBillList(year, month, centerId, shopId) {
     } else if (bd.last !== undefined) {
       income = parseFloat(bd.last) || 0;
     }
-    // 诊断：如果 income 为0但 API 返回成功，记录详细响应
-    // ⚠️ 诊断代码：记录所有响应的原始数据，用于排查2025-06数据问题
-    console.log(`[API诊断 ${monthStr} ${shopNameResolved}] incomeTotal=${incomeObj?.incomeTotal}, bd.last=${bd.last}, full_response=`, JSON.stringify(json).slice(0, 500));
+    // 诊断：打印历史月份查询参数和返回值
+    if (isHistorical) {
+      console.log(`[历史月API ${monthStr}] qs=${qs} → incomeTotal=${incomeObj?.incomeTotal} | bd.last=${bd.last}`);
+    }
     if (income === 0 && res.status === 200) {
-      console.warn(`[月度汇总 警告] ${monthStr} ${shopNameResolved}: income=0, API状态=${res.status}, 响应=`, JSON.stringify(json?.data?.List?.income || json?.data?.List?.businessData || json));
+      console.warn(`[月度汇总 警告] ${monthStr} ${shopNameResolved}: income=0, API状态=${res.status}`);
     }
   } catch (e) {
     apiStatus = `error: ${e.message}`;
@@ -1021,6 +1034,12 @@ async function loadAllData() {
     }
   });
 
+  // ⚠️ 先清空年度汇总，防止页面刷新时重复累加
+  Object.keys(yearlyData).forEach(k => delete yearlyData[k]);
+  Object.keys(shopYearlyData).forEach(sid => {
+    if (shopYearlyData[sid]) Object.keys(shopYearlyData[sid]).forEach(k => delete shopYearlyData[sid][k]);
+  });
+
   // 年度汇总（从已缓存月份累加）
   Object.entries(monthlyData).forEach(([mKey, total]) => {
     const yKey = mKey.slice(0, 4);
@@ -1033,17 +1052,8 @@ async function loadAllData() {
     });
   });
 
-  // 从 localStorage 加载已缓存的年度汇总（由 ensureMonthData 运行期间同步写入）
-  // ⚠️ 注意：shopYearlyData 已从 monthlyData 累加，此处直接覆盖不用累加（避免双重计数）
-  const lsYearly = lsLoadYearlyData();
-  Object.entries(lsYearly).forEach(([cid, years]) => {
-    const n = Number(cid);
-    if (shopYearlyData[n]) {
-      Object.entries(years).forEach(([y, amt]) => {
-        shopYearlyData[n][y] = amt;  // 直接覆盖，不累加
-      });
-    }
-  });
+  // 年度汇总已由 monthlyData 实时累加生成，不再从 localStorage 加载旧缓存覆盖
+  // 原因：lsLoadYearlyData() 可能加载到旧版本的错误缓存数据，导致年度汇总被污染
   console.log(`[缓存恢复] ${cacheHit} 个月份已加载，共 ${Object.keys(monthlyData).length} 个有数据月份`);
   // 诊断：打印广安门店(247415)各年份年度汇总
   const guanAnSid = 247415;
