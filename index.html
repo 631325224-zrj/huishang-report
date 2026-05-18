@@ -222,12 +222,14 @@ canvas { display: block; }
     </div>
 
     <button id="btnReset" class="btn btn-primary" style="margin-left:auto">重置</button>
-    <button id="btnTestYearDim" class="btn" style="background:#8e44ad;color:#fff;border-color:#8e44ad;font-size:11px;padding:4px 10px">🔍 探测年维度</button>
+    <button id="btnClearCache" class="btn" style="background:#f39c12;color:#fff;border-color:#f39c12;font-size:12px;padding:6px 14px">🗑️ 清除缓存</button>
+    <!-- 以下四个调试按钮已隐藏，如需调试请取消注释 -->
+    <button id="btnTestYearDim" class="btn" style="display:none;background:#8e44ad;color:#fff;border-color:#8e44ad;font-size:11px;padding:4px 10px">🔍 探测年维度</button>
     <div class="ctrl-hint" id="ctrl-hint"></div>
   </div>
 
-  <!-- 年维度探测结果区域 -->
-  <div id="year-dim-result" style="display:none;background:#fff;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06)">
+  <!-- 年维度探测结果区域（已隐藏） -->
+  <div id="year-dim-result" style="display:none">
     <div style="font-weight:700;margin-bottom:6px;color:#8e44ad">🔍 年维度 API 探测结果（广安门店 2025年9月1日）</div>
     <div id="year-dim-content"></div>
   </div>
@@ -262,7 +264,7 @@ canvas { display: block; }
         <span class="meta" id="occ-table-meta"></span>
         <div class="actions">
           <button class="btn btn-export" onclick="exportOccupancy()">📥 导出</button>
-          <button class="btn btn-export" style="background:#8e44ad" onclick="debugOccupancy()">🔧 调试</button>
+          <button class="btn btn-export" style="display:none;background:#8e44ad" onclick="debugOccupancy()">🔧 调试</button>
         </div>
       </div>
       <div class="table-scroll">
@@ -353,10 +355,10 @@ canvas { display: block; }
   </div>
   </div>
 
-  <!-- 诊断面板 -->
-  <div id="diag-panel" style="display:none; margin-top:12px; padding:12px; background:#f8f9fa; border-radius:8px; font-size:11px; font-family:monospace; white-space:pre-wrap; word-break:break-all; border:1px solid #e0e0e0;"></div>
+  <!-- 诊断面板（已隐藏） -->
+  <div id="diag-panel" style="display:none"></div>
   <div style="text-align:center; margin-top:12px; margin-bottom:8px;">
-    <button onclick="window.showDiagnostics()" style="font-size:12px; padding:6px 16px; color:#666; background:#fff; border:1px solid #ccc; border-radius:6px; cursor:pointer;">🔍 显示诊断数据</button>
+    <button onclick="window.showDiagnostics()" style="display:none;font-size:12px; padding:6px 16px; color:#666; background:#fff; border:1px solid #ccc; border-radius:6px; cursor:pointer;">🔍 显示诊断数据</button>
   </div>
 
   <div class="footer">
@@ -911,7 +913,7 @@ function lsLoadYearlyData() {
 // ══════════════════════════════════════════════════════════
 // 清理旧缓存（v10→v11：历史年改回 getBusinessSituation dateType=2，探测证实2025年有效；清除v10逐天累加错误数据及预加载双写Bug数据）
 // ══════════════════════════════════════════════════════════
-const LS_CACHE_VERSION = 'v18';  // v18: 修复重复变量声明导致页面卡住的Bug
+const LS_CACHE_VERSION = 'v20';  // v20: 基于dd052f3稳定版，强制清除历史脏缓存
 
 function lsClearOldCache() {
   // 检查是否需要清理旧缓存
@@ -1627,6 +1629,20 @@ function bindEvents() {
     document.getElementById('dateB').value = prev;
     STATE.dateB = prev;
     render();
+  });
+
+  // 🗑️ 清除缓存按钮
+  document.getElementById('btnClearCache').addEventListener('click', () => {
+    if (!confirm('确定要清除所有本地缓存吗？\n\n这将删除本地保存的所有历史数据，刷新后重新从 API 获取。')) return;
+    localStorage.removeItem(LS_MONTHLY);
+    localStorage.removeItem(LS_META);
+    localStorage.removeItem(LS_YEARLY);
+    localStorage.removeItem('hs_cache_version');
+    localStorage.removeItem('hs_shop_data_cache');
+    loadedMonths.clear();
+    Object.keys(SHOP_DATA_CACHE).forEach(k => delete SHOP_DATA_CACHE[k]);
+    alert('缓存已清除，页面即将刷新…');
+    window.location.href = window.location.pathname + '?t=' + Date.now();
   });
 
   // ── 出租率控件事件 ──
