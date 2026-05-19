@@ -463,7 +463,8 @@ let STATE = {
   occYearA: null,  // 出租率年份（按月/年）
   occMonthA: null, // 出租率月份（按月）
 };
-let OCC_DATA = null; // 出租率数据缓存（当前查询结果）
+let OCC_DATA = null;    // 出租率数据缓存（当前查询结果）
+let OCC_LOADING = false; // 出租率预加载进行中
 let chartBar=null, chartLine=null;
 let chartsCollapsed = false;
 let token = null;
@@ -1772,9 +1773,12 @@ function updateOccupyCtrl() {
 // 说明：全局加载时会自动后台预加载当日出租率数据到 OCC_DATA
 // 切换 Tab 时若 OCC_DATA 已就绪则直接呈现，无需再查询
 async function renderOccupancy() {
+  const loadingEl = document.getElementById('occ-loading');
+  const tbody = document.getElementById('occ-tbody');
+
   // 若出租率数据已预加载完毕，直接呈现（不显示加载状态）
   if (OCC_DATA) {
-    // 确定查询日期/月份/年份
+    if (loadingEl) loadingEl.style.display = 'none';
     let settleDate = STATE.occDateA;
     let dateType = 1;
     if (STATE.occDim === 'month') {
@@ -1788,20 +1792,24 @@ async function renderOccupancy() {
     return;
   }
 
-  // 未预加载时，显示加载状态并查询
-  const loadingEl = document.getElementById('occ-loading');
-  const tbody = document.getElementById('occ-tbody');
+  // 若后台正在预加载，仅显示等待文案，不重复发起查询
+  if (OCC_LOADING) {
+    if (loadingEl) { loadingEl.style.display = ''; }
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#aaa">数据加载中，请稍候…</td></tr>';
+    return;
+  }
+
+  // 既无数据也未在加载中，才发起查询
   if (loadingEl) { loadingEl.style.display = ''; }
   if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#aaa">查询中…</td></tr>';
 
-  // 确定查询日期/月份/年份
   let settleDate = STATE.occDateA;
   let dateType = 1;
   if (STATE.occDim === 'month') {
     settleDate = `${STATE.occYearA}-${p(STATE.occMonthA)}-01`;
     dateType = 2;
   } else if (STATE.occDim === 'year') {
-    settleDate = `${STATE.occYearA}`;  // 直接传年份字符串
+    settleDate = `${STATE.occYearA}`;
     dateType = 3;
   }
 
@@ -3005,11 +3013,14 @@ window.addEventListener('DOMContentLoaded', async () => {
       console.log('[后台刷新] 最新数据已更新');
       // 主数据加载完成后再预加载出租率，避免token竞争导致-400004
       const occToday = `${new Date().getFullYear()}-${p(new Date().getMonth()+1)}-${p(new Date().getDate())}`;
+      OCC_LOADING = true;
       queryOccupancyAll(occToday, 1).then(result => {
         OCC_DATA = result;
-        if (STATE.dim === 'occupy') renderOccupancyTable(result, occToday);
+        OCC_LOADING = false;
+        if (STATE.dim === 'occupy') renderOccupancy();
         console.log('[出租率预加载] 当日数据已就绪');
       }).catch(e => {
+        OCC_LOADING = false;
         console.warn('[出租率预加载失败]', e.message);
       });
     }).catch(err => {
@@ -3033,11 +3044,14 @@ window.addEventListener('DOMContentLoaded', async () => {
       console.log('[无缓存] 全量加载完成，呈现完整数据');
       // 主数据完成后预加载出租率，避免token竞争
       const occToday = `${new Date().getFullYear()}-${p(new Date().getMonth()+1)}-${p(new Date().getDate())}`;
+      OCC_LOADING = true;
       queryOccupancyAll(occToday, 1).then(result => {
         OCC_DATA = result;
-        if (STATE.dim === 'occupy') renderOccupancyTable(result, occToday);
+        OCC_LOADING = false;
+        if (STATE.dim === 'occupy') renderOccupancy();
         console.log('[出租率预加载] 当日数据已就绪');
       }).catch(e => {
+        OCC_LOADING = false;
         console.warn('[出租率预加载失败]', e.message);
       });
     }).catch(err => {
