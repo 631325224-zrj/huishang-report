@@ -960,8 +960,7 @@ function lsClearOldCache() {
 }
 
 async function loadAllData() {
-  // 清理旧缓存（API升级后需要）
-  lsClearOldCache();
+  // （缓存清理已在 DOMContentLoaded 入口调用，此处不再重复清理）
   
   updateProgress(5, '获取访问凭证…');
   token = await getToken();
@@ -2911,7 +2910,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   DATA = initDATA();
   initSelectors();
 
-  // 检查是否有缓存数据
+  // 先执行缓存版本清理（必须在 hasCache 判断前，防止旧 meta 误判为有缓存）
+  lsClearOldCache();
+
+  // 检查是否有缓存数据（lsClearOldCache 之后判断，避免旧 meta 残留导致误判）
   const hasCache = (() => {
     try {
       const meta = localStorage.getItem(LS_META);
@@ -2921,8 +2923,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     } catch { return false; }
   })();
 
-  if (hasCache) {
-    // 有缓存：先渲染缓存数据，再后台刷新
+    // 尝试恢复缓存
     lsRestoreMonths();
     const monthlyData = DATA.monthlyData;
     const yearlyData = DATA.yearlyData;
@@ -2941,34 +2942,36 @@ window.addEventListener('DOMContentLoaded', async () => {
         cacheHit++;
       }
     });
-    // 从缓存月份累加年度数据
-    Object.entries(monthlyData).forEach(([mKey, total]) => {
-      const yKey = mKey.slice(0, 4);
-      yearlyData[yKey] = (yearlyData[yKey] || 0) + total;
-      Object.entries(shopMonthlyData).forEach(([cid, months]) => {
-        if (months[mKey]) {
-          if (!shopYearlyData[cid]) shopYearlyData[cid] = {};
-          shopYearlyData[cid][yKey] = (shopYearlyData[cid][yKey] || 0) + months[mKey];
-        }
-      });
-    });
-    DATA.summary = {
-      today: 0,
-      currentMonth: monthlyData[`${new Date().getFullYear()}-${p(new Date().getMonth()+1)}`] || 0,
-      currentYear: yearlyData[String(new Date().getFullYear())] || 0,
-    };
-    document.getElementById('loading-mask').style.display = 'none';
-    render();
-    console.log(`[缓存秒进] ${cacheHit} 个月份已恢复，立即渲染`);
 
-    // 后台静默刷新最新数据
-    loadAllData().then(() => {
+    if (cacheHit > 0) {
+      // 有有效缓存：立即渲染 + 后台刷新
+      Object.entries(monthlyData).forEach(([mKey, total]) => {
+        const yKey = mKey.slice(0, 4);
+        yearlyData[yKey] = (yearlyData[yKey] || 0) + total;
+        Object.entries(shopMonthlyData).forEach(([cid, months]) => {
+          if (months[mKey]) {
+            if (!shopYearlyData[cid]) shopYearlyData[cid] = {};
+            shopYearlyData[cid][yKey] = (shopYearlyData[cid][yKey] || 0) + months[mKey];
+          }
+        });
+      });
+      DATA.summary = {
+        today: 0,
+        currentMonth: monthlyData[`${new Date().getFullYear()}-${p(new Date().getMonth()+1)}`] || 0,
+        currentYear: yearlyData[String(new Date().getFullYear())] || 0,
+      };
+      document.getElementById('loading-mask').style.display = 'none';
       render();
-      console.log('[后台刷新] 数据已更新');
-    }).catch(err => {
-      console.error('[后台刷新失败]', err);
-    });
-  } else {
+      console.log(`[缓存秒进] ${cacheHit} 个月份已恢复，立即渲染`);
+
+      // 后台静默刷新最新数据
+      loadAllData().then(() => {
+        render();
+        console.log('[后台刷新] 数据已更新');
+      }).catch(err => {
+        console.error('[后台刷新失败]', err);
+      });
+    } else {
     // 无缓存：等全局加载完再呈现
     loadAllData().then(() => {
       document.getElementById('loading-mask').style.display = 'none';
