@@ -616,6 +616,17 @@ async function queryMonthBillList(year, month, centerId, shopId) {
     apiStatus = res.status;
     const json = await res.json();
     rawResponse = json;
+    // 检查 API 返回码
+    const apiCode = json?.code;
+    if (apiCode !== '0' && apiCode !== 0) {
+      apiStatus = `api_error:${apiCode}`;
+      console.error(`[月度汇总 API错误] ${monthStr} ${shopNameResolved}: code=${apiCode}, msg=${json?.msg || 'unknown'}`);
+      const shops = { [sid]: { name: shopNameResolved, income: 0 } };
+      const result = { totalIncome: 0, shops, monthStr, apiStatus, rawResponse };
+      // 不写入 SHOP_DATA_CACHE，允许重试
+      console.log(`[月度汇总] ${monthStr} ${shopNameResolved}: API错误, 状态=${apiStatus}`);
+      return result;
+    }
     const incomeObj = json?.data?.List?.income;
     const bd = json?.data?.List?.businessData ?? {};
     if (incomeObj?.incomeTotal !== undefined) {
@@ -624,7 +635,7 @@ async function queryMonthBillList(year, month, centerId, shopId) {
       income = parseFloat(bd.last) || 0;
     }
     if (income === 0 && res.status === 200) {
-      console.warn(`[月度汇总 警告] ${monthStr} ${shopNameResolved}: income=0, API状态=${res.status}`);
+      console.warn(`[月度汇总 警告] ${monthStr} ${shopNameResolved}: income=0, API状态=${res.status}, code=${apiCode}`);
     }
   } catch (e) {
     apiStatus = `error: ${e.message}`;
@@ -914,7 +925,7 @@ function lsLoadYearlyData() {
 // 清理旧缓存
 // v23: 修正月度查询为 beginDate/endDate + dateType=1（之前 dateType=2/3 对历史年和当年均返回单日数据，非整月汇总）
 // ══════════════════════════════════════════════════════════
-const LS_CACHE_VERSION = 'v23';  // v23: 使用区间查询获取整月汇总
+const LS_CACHE_VERSION = 'v24';  // v24: 强制清除v23可能存在的脏缓存，添加API错误码检查
 
 function lsClearOldCache() {
   // 检查是否需要清理旧缓存
@@ -1150,6 +1161,20 @@ async function loadAllData() {
     currentMonth: monthlyData[curMonthKey] || 0,
     currentYear: yearlyData[String(curYear)] || 0,
   };
+
+  // ── 诊断：如果全部月度数据为0，在控制台打印详细诊断信息 ──
+  const allMonthTotals = Object.values(monthlyData);
+  const nonZeroMonths = allMonthTotals.filter(v => v > 0);
+  if (nonZeroMonths.length === 0 && allMonthTotals.length > 0) {
+    console.error('[诊断警告] 所有月度数据均为0！可能原因：');
+    console.error('  1. API 请求被浏览器拦截（CORS/安全策略）');
+    console.error('  2. Token 获取失败或过期');
+    console.error('  3. 网络连接问题');
+    console.error('  4. API 返回错误码（请检查上方 [月度汇总 API错误] 日志）');
+    console.error('  建议：打开浏览器开发者工具(F12)查看 Network/Console 标签');
+  } else {
+    console.log(`[诊断] 共 ${allMonthTotals.length} 个月份，${nonZeroMonths.length} 个非零，当月=${(monthlyData[curMonthKey]||0).toFixed(2)}`);
+  }
 
   return {
     success: true,
