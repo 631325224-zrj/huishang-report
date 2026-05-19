@@ -714,14 +714,21 @@ async function queryShopRooms(shopId, retry = 0) {
       rooms += roomCount;
     });
   } catch (e) {
-    console.warn(`[包间数查询失败] shopId=${shopId}`, e.message);
-    // token 失效时自动刷新并重试（最多1次）
+    console.warn(`[包间数查询失败] shopId=${shopId} retry=${retry}`, e.message);
     const tokenErrors = ['-400004', '-400003', '-400002', '-400001', '401', '403'];
-    if (retry === 0 && (tokenErrors.includes(String(apiCode)) || e.message.includes('token'))) {
+    const isTokenErr = tokenErrors.includes(String(apiCode)) || e.message.includes('token');
+    // 第一次失败：刷新token立即重试
+    if (retry === 0 && isTokenErr) {
       token = await getToken();
       if (token) return queryShopRooms(shopId, 1);
     }
-    // 失败不缓存，让下次查询重试
+    // 第二次失败：等2秒后再次重试（token竞争/限流时有效）
+    if (retry === 1 && isTokenErr) {
+      await new Promise(r => setTimeout(r, 2000));
+      token = await getToken();
+      if (token) return queryShopRooms(shopId, 2);
+    }
+    // 第三次失败或网络错误：返回0，不缓存
     return rooms;
   }
   OCCUPY_CACHE[cacheKey] = rooms;
@@ -770,9 +777,9 @@ async function queryBookOrders(shopId, beginDate, endDate) {
 async function queryOccupancyAll(settleDate, dateType = 1) {
   const shopIds = ALL_SHOPS.map(s => s.centerId);
 
-  // 第一步：并发查所有门店包间数（getServiceArea 只用 centerId）
+  // 第一步：串行查所有门店包间数（getServiceArea 对并发敏感，降到1避免token竞争）
   const roomTasks = shopIds.map(sid => () => queryShopRooms(sid));
-  const roomResults = await batchQuery(roomTasks, 3);
+  const roomResults = await batchQuery(roomTasks, 1);
 
   // 第二步：查预订数（按维度确定日期范围）
   let reserveResults;
@@ -1555,8 +1562,8 @@ function bindEvents() {
       document.getElementById('charts-section-wrap').style.display = isOccupy ? 'none' : '';
       document.getElementById('revenue-table-wrap').style.display  = isOccupy ? 'none' : '';
       if (isOccupy) {
-        // 切换到出租率Tab时自动触发查询（若数据未加载）
-        if (!OCC_DATA) renderOccupancy();
+        // 切换到出租率Tab时自动触发查询（或渲染已预加载的数据）
+        renderOccupancy();
       } else {
         updateBSelector(); render();
       }
@@ -2992,36 +2999,25 @@ window.addEventListener('DOMContentLoaded', async () => {
     render();
     console.log(`[有缓存] ${cacheHit} 个月份已恢复，直接呈现`);
 
-    // 后台静默刷新最新月数据 + 预加载（不阻塞 UI）
-    // 同时后台预加载当日出租率数据，切换到出租率Tab时直接呈现
+    // 后台静默刷新最新月数据，完成后预加载出租率（避免token竞争）
     loadAllData().then(() => {
       render();
       console.log('[后台刷新] 最新数据已更新');
+      // 主数据加载完成后再预加载出租率，避免token竞争导致-400004
+      const occToday = `${new Date().getFullYear()}-${p(new Date().getMonth()+1)}-${p(new Date().getDate())}`;
+      queryOccupancyAll(occToday, 1).then(result => {
+        OCC_DATA = result;
+        if (STATE.dim === 'occupy') renderOccupancyTable(result, occToday);
+        console.log('[出租率预加载] 当日数据已就绪');
+      }).catch(e => {
+        console.warn('[出租率预加载失败]', e.message);
+      });
     }).catch(err => {
       console.error('[后台刷新失败]', err);
-    });
-    // 出租率数据后台预加载（当日，切换Tab时直接呈现）
-    const occToday = `${new Date().getFullYear()}-${p(new Date().getMonth()+1)}-${p(new Date().getDate())}`;
-    queryOccupancyAll(occToday, 1).then(result => {
-      OCC_DATA = result;
-      // 如果当前已切换到出租率Tab，立即渲染
-      if (STATE.dim === 'occupy') renderOccupancyTable(result, occToday);
-      console.log('[出租率预加载] 当日数据已就绪');
-    }).catch(e => {
-      console.warn('[出租率预加载失败]', e.message);
     });
 
   } else {
   // ── 无缓存：显示加载遮罩，等全部加载完再呈现 ──
-    // 出租率数据与主数据并行加载（不阻塞加载遮罩）
-    const occToday = `${new Date().getFullYear()}-${p(new Date().getMonth()+1)}-${p(new Date().getDate())}`;
-    queryOccupancyAll(occToday, 1).then(result => {
-      OCC_DATA = result;
-      console.log('[出租率预加载] 当日数据已就绪');
-    }).catch(e => {
-      console.warn('[出租率预加载失败]', e.message);
-    });
-
     loadAllData().then(result => {
       // 把 loadAllData 返回的 availableMonths/availableYears 写入 DATA
       // 这样 initSelectors() 才能读到正确的下拉选项
@@ -3035,6 +3031,15 @@ window.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('loading-mask').style.display = 'none';
       render(); // 加载完毕后统一呈现
       console.log('[无缓存] 全量加载完成，呈现完整数据');
+      // 主数据完成后预加载出租率，避免token竞争
+      const occToday = `${new Date().getFullYear()}-${p(new Date().getMonth()+1)}-${p(new Date().getDate())}`;
+      queryOccupancyAll(occToday, 1).then(result => {
+        OCC_DATA = result;
+        if (STATE.dim === 'occupy') renderOccupancyTable(result, occToday);
+        console.log('[出租率预加载] 当日数据已就绪');
+      }).catch(e => {
+        console.warn('[出租率预加载失败]', e.message);
+      });
     }).catch(err => {
       console.error('数据加载异常:', err);
       initSelectors();
