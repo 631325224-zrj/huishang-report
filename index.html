@@ -680,10 +680,11 @@ const OCCUPY_CACHE = {}; // 出租率缓存
 // 查询单门店包间数（getServiceArea）
 // 结构：areaList[i].pointList[j] — 客位类型在 pointList 的 typeName 字段中
 // centerId = 集团总部ID(247412)，shopId = 门店自身的centerId
-async function queryShopRooms(shopId) {
+async function queryShopRooms(shopId, retry = 0) {
   const cacheKey = `rooms_${shopId}`;
   if (OCCUPY_CACHE[cacheKey] !== undefined) return OCCUPY_CACHE[cacheKey];
   let rooms = 0;
+  let apiCode = null;
   try {
     const qs = `centerId=${API_CONFIG.centerId}&shopId=${shopId}&pageNo=1&pageSize=200`;
     const controller = new AbortController();
@@ -695,6 +696,11 @@ async function queryShopRooms(shopId) {
     });
     clearTimeout(tid);
     const json = await res.json();
+    apiCode = json?.code;
+    // API 返回码非0视为失败
+    if (String(apiCode) !== '0') {
+      throw new Error(`API code=${apiCode} msg=${json?.msg || ''}`);
+    }
     const areaList = json?.data?.areaList || [];
     // 遍历每个消费区域，累加 pointList 中的包间数量
     areaList.forEach(area => {
@@ -709,6 +715,14 @@ async function queryShopRooms(shopId) {
     });
   } catch (e) {
     console.warn(`[包间数查询失败] shopId=${shopId}`, e.message);
+    // token 失效时自动刷新并重试（最多1次）
+    const tokenErrors = ['-400003', '-400002', '-400001', '401', '403'];
+    if (retry === 0 && (tokenErrors.includes(String(apiCode)) || e.message.includes('token'))) {
+      token = await getToken();
+      if (token) return queryShopRooms(shopId, 1);
+    }
+    // 失败不缓存，让下次查询重试
+    return rooms;
   }
   OCCUPY_CACHE[cacheKey] = rooms;
   return rooms;
@@ -758,14 +772,14 @@ async function queryOccupancyAll(settleDate, dateType = 1) {
 
   // 第一步：并发查所有门店包间数（getServiceArea 只用 centerId）
   const roomTasks = shopIds.map(sid => () => queryShopRooms(sid));
-  const roomResults = await batchQuery(roomTasks, 10);
+  const roomResults = await batchQuery(roomTasks, 3);
 
   // 第二步：查预订数（按维度确定日期范围）
   let reserveResults;
   if (dateType === 1) {
     // 日维度：查当天
     const tasks = shopIds.map(sid => () => queryBookOrders(sid, settleDate, settleDate));
-    const rResults = await batchQuery(tasks, 10);
+    const rResults = await batchQuery(tasks, 3);
     const shops = {};
     shopIds.forEach((sid, i) => {
       shops[sid] = { ...(rResults[i] || { noon: 0, evening: 0 }), rooms: roomResults[i] || 0 };
@@ -778,7 +792,7 @@ async function queryOccupancyAll(settleDate, dateType = 1) {
     const lastDay = new Date(year, month, 0).getDate();
     const end = `${year}-${month}-${p(lastDay)}`;
     const tasks = shopIds.map(sid => () => queryBookOrders(sid, begin, end));
-    const rResults = await batchQuery(tasks, 10);
+    const rResults = await batchQuery(tasks, 3);
     const shops = {};
     shopIds.forEach((sid, i) => {
       shops[sid] = { ...(rResults[i] || { noon: 0, evening: 0 }), rooms: roomResults[i] || 0 };
@@ -790,7 +804,7 @@ async function queryOccupancyAll(settleDate, dateType = 1) {
     const begin = `${year}-01-01`;
     const end = `${year}-12-31`;
     const tasks = shopIds.map(sid => () => queryBookOrders(sid, begin, end));
-    const rResults = await batchQuery(tasks, 10);
+    const rResults = await batchQuery(tasks, 3);
     const shops = {};
     shopIds.forEach((sid, i) => {
       shops[sid] = { ...(rResults[i] || { noon: 0, evening: 0 }), rooms: roomResults[i] || 0 };
