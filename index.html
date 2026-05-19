@@ -622,7 +622,7 @@ async function queryMonthBillList(year, month, centerId, shopId) {
       apiStatus = `api_error:${apiCode}`;
       console.error(`[月度汇总 API错误] ${monthStr} ${shopNameResolved}: code=${apiCode}, msg=${json?.msg || 'unknown'}`);
       const shops = { [sid]: { name: shopNameResolved, income: 0 } };
-      const result = { totalIncome: 0, shops, monthStr, apiStatus, rawResponse };
+      const result = { totalIncome: 0, shops, monthStr, apiStatus, rawResponse, success: false };
       // 不写入 SHOP_DATA_CACHE，允许重试
       console.log(`[月度汇总] ${monthStr} ${shopNameResolved}: API错误, 状态=${apiStatus}`);
       return result;
@@ -640,10 +640,12 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   } catch (e) {
     apiStatus = `error: ${e.message}`;
     console.warn(`[月度汇总 失败] ${monthStr} 门店${shopId}:`, e.message);
+    // 网络错误/超时，不写入缓存，允许下次重试
+    return { totalIncome: 0, shops: { [sid]: { name: shopNameResolved, income: 0 } }, monthStr, apiStatus, rawResponse: null, success: false };
   }
 
   const shops = { [sid]: { name: shopNameResolved, income } };
-  const result = { totalIncome: income, shops, monthStr, apiStatus, rawResponse };
+  const result = { totalIncome: income, shops, monthStr, apiStatus, rawResponse, success: true };
   SHOP_DATA_CACHE[cacheKey] = result;
   console.log(`[月度汇总] ${monthStr} ${shopNameResolved}: 纯收=${income.toFixed(2)}, API状态=${apiStatus}`);
   return result;
@@ -925,7 +927,7 @@ function lsLoadYearlyData() {
 // 清理旧缓存
 // v23: 修正月度查询为 beginDate/endDate + dateType=1（之前 dateType=2/3 对历史年和当年均返回单日数据，非整月汇总）
 // ══════════════════════════════════════════════════════════
-const LS_CACHE_VERSION = 'v24';  // v24: 强制清除v23可能存在的脏缓存，添加API错误码检查
+const LS_CACHE_VERSION = 'v25';  // v25: 修复queryMonthBillList错误缓存bug，移除预加载改为纯按需加载
 
 function lsClearOldCache() {
   // 检查是否需要清理旧缓存
@@ -1065,7 +1067,12 @@ async function loadAllData() {
   });
 
   const shopMonthTmp = {};
+  let failCount = 0;
   monthResults.forEach(result => {
+    if (result?.success === false) {
+      failCount++;
+      return;
+    }
     if (result?.shops) {
       Object.entries(result.shops).forEach(([sid, shopData]) => {
         const n = Number(sid);
@@ -1082,76 +1089,23 @@ async function loadAllData() {
     }
   });
 
-  console.log(`[当前月账单API] ${curMonthKey}: 总纯收=${monthlyData[curMonthKey].toFixed(2)}, 参与门店=${Object.keys(shopMonthTmp).length}`);
+  console.log(`[当前月账单API] ${curMonthKey}: 总纯收=${monthlyData[curMonthKey].toFixed(2)}, 参与门店=${Object.keys(shopMonthTmp).length}, 失败=${failCount}`);
 
   // 将当前月数据写入 localStorage（下次访问直接用缓存）
   lsSaveMonth(curMonthKey, monthlyData[curMonthKey], shopMonthTmp);
-  loadedMonths.add(curMonthKey);
-  lsSaveMeta();
-
-  console.log(`[加载完成] 当前月 ${curMonthKey}:`, monthlyData[curMonthKey]);
-  console.log('[月数据]', monthlyData);
-  console.log('[门店月数据] 大蜀山:', shopMonthlyData[247421]);
-
-  // ══════════════════════════════════════════════════════════
-  // 第三阶段：加载所有上线后的历史月份（同步等待，确保全部加载完再呈现）
-  // ══════════════════════════════════════════════════════════
-  const preloadTargets = [];
-  months.forEach(m => {
-    if (m.key !== curMonthKey && !loadedMonths.has(m.key)) {
-      const [py, pm] = m.key.split('-').map(Number);
-      preloadTargets.push([py, pm, m.key]);
-    }
-  });
-  console.log(`[预加载] 目标月份: ${preloadTargets.map(t => t[2]).join(', ')} (${preloadTargets.length}个月)`);
-
-  // 批量并发预加载（同步等待全部完成）
-  const BATCH_SIZE = 3; // 每月28次请求，3个月并发 = 84次请求，控制并发量
-  for (let i = 0; i < preloadTargets.length; i += BATCH_SIZE) {
-    const batch = preloadTargets.slice(i, i + BATCH_SIZE);
-    const batchPromises = batch.map(async ([py, pm, pk]) => {
-      try {
-        if (loadedMonths.has(pk)) return;
-        const tasks = shopIds.map(sid => () => queryMonthBillList(py, pm, API_CONFIG.centerId, sid));
-        const results = await batchQuery(tasks, 10);
-        if (loadedMonths.has(pk)) return;
-        const prevYKey = String(py);
-        const shopTmp = {};
-        results.forEach(result => {
-          if (result?.shops) {
-            Object.entries(result.shops).forEach(([sid, shopData]) => {
-              const n = Number(sid);
-              if (shopData.income > 0) {
-                monthlyData[pk] = (monthlyData[pk] || 0) + shopData.income;
-                yearlyData[prevYKey] = (yearlyData[prevYKey] || 0) + shopData.income;
-                if (!shopMonthlyData[n]) shopMonthlyData[n] = {};
-                if (!shopYearlyData[n]) shopYearlyData[n] = {};
-                shopMonthlyData[n][pk] = (shopMonthlyData[n][pk] || 0) + shopData.income;
-                shopYearlyData[n][prevYKey] = (shopYearlyData[n][prevYKey] || 0) + shopData.income;
-                shopTmp[n] = (shopTmp[n] || 0) + shopData.income;
-              }
-            });
-          }
-        });
-        if (Object.keys(shopTmp).length > 0) {
-          lsSaveMonth(pk, monthlyData[pk], shopTmp);
-          loadedMonths.add(pk);
-        }
-        console.log(`[预加载 ${pk}] 完成: ${Object.keys(shopTmp).length} 门店, 总纯收=${monthlyData[pk]?.toFixed(2)}`);
-      } catch (e) {
-        console.warn(`[预加载失败] ${pk}`, e.message);
-      }
-    });
-    const progressStart = 70;
-    const progressEnd = 98;
-    const pct = Math.round(progressStart + (i / preloadTargets.length) * (progressEnd - progressStart));
-    updateProgress(pct, `加载历史数据 ${i + 1}/${preloadTargets.length} 个月…`);
-    await Promise.all(batchPromises);
+  if (failCount === 0) {
+    loadedMonths.add(curMonthKey);
+    lsSaveMeta();
+  } else {
+    console.warn(`[当前月] ${failCount} 个门店加载失败，未标记为已完整加载，刷新后将自动重试`);
   }
 
-  lsSaveMeta();
-  console.log('[预加载] 全部完成');
+  console.log(`[加载完成] 当前月 ${curMonthKey}:`, monthlyData[curMonthKey]);
 
+  // ══════════════════════════════════════════════════════════
+  // 第三阶段：历史月份改为纯按需加载（用户切换月份/年报时自动加载）
+  // 不再预加载所有历史月份，避免大量请求导致失败
+  // ══════════════════════════════════════════════════════════
   updateProgress(100, '完成');
   // 同步 dailyData 到 DATA（monthlyData/yearlyData 等已经是 DATA 的引用）
   DATA.dailyData = dailyData;
@@ -1299,6 +1253,10 @@ async function ensureMonthData(year, month) {
     let failCount = 0;
     let zeroIncomeCount = 0;
     results.forEach(result => {
+      if (result?.success === false) {
+        failCount++;
+        return;
+      }
       if (result?.shops) {
         Object.entries(result.shops).forEach(([sid, shopData]) => {
           const n = Number(sid);
@@ -1322,10 +1280,17 @@ async function ensureMonthData(year, month) {
 
     console.log(`[${key} 月度汇总] 总纯收: ${DATA.monthlyData[key].toFixed(2)}, 参与门店数: ${Object.keys(shopMonthTmp).length}, 成功=${successCount}, 零收入=${zeroIncomeCount}, 失败=${failCount}`);
 
-    // ── 写入 localStorage，下次访问直接用缓存，无需再请求 API ──
-    lsSaveMonth(key, DATA.monthlyData[key], shopMonthTmp);
-    loadedMonths.add(key); // ✅ 标记为已完整加载
-    lsSaveMeta();
+    // ── 写入 localStorage，只有全部成功才标记为已完整加载 ──
+    const allSuccess = failCount === 0 && successCount > 0;
+    if (allSuccess || Object.keys(shopMonthTmp).length > 0) {
+      lsSaveMonth(key, DATA.monthlyData[key], shopMonthTmp);
+    }
+    if (allSuccess) {
+      loadedMonths.add(key); // ✅ 全部成功才标记为已完整加载
+      lsSaveMeta();
+    } else if (failCount > 0) {
+      console.warn(`[${key}] 有 ${failCount} 个门店加载失败，未标记为已加载，下次将重试`);
+    }
     console.log(`[加载完成] ${key}:`, DATA.monthlyData[key], '(已写入本地缓存)');
     // 非年报批量加载模式下，触发渲染
     if (!_yearBatchLoading) {
@@ -2936,11 +2901,11 @@ window.addEventListener('DOMContentLoaded', async () => {
         }
       });
     });
-    // 填充 availableMonths（让 initSelectors 能读到正确的月份列表）
-    const availableMonths = [...loadedMonths].sort();
+    // availableMonths 保留所有可查询月份（近12个月），不限制为仅已加载
+    // loadedMonths 单独跟踪已加载状态，用于避免重复加载
+    const availableMonths = DATA.availableMonths || [];
     const curYear = new Date().getFullYear();
     const availableYears = [...new Set(availableMonths.map(k => parseInt(k.slice(0, 4))))].sort();
-    DATA.availableMonths = availableMonths;
     DATA.availableYears = availableYears;
 
     // 初始化选择器（有缓存数据后才能正确渲染下拉选项）
