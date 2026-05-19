@@ -240,13 +240,13 @@ canvas { display: block; }
       <div class="occ-card">
         <div class="lbl">🌞 午市出租率</div>
         <div class="pct" id="occ-noon-pct">—</div>
-        <div class="sub" id="occ-noon-sub">午市预订 — / 总包间 —</div>
+        <div class="sub" id="occ-noon-sub">午市 — / 总包间 —</div>
         <div class="occ-bar"><div class="occ-bar-fill" id="occ-noon-bar" style="width:0%"></div></div>
       </div>
       <div class="occ-card">
         <div class="lbl">🌙 晚市出租率</div>
         <div class="pct" id="occ-eve-pct">—</div>
-        <div class="sub" id="occ-eve-sub">晚市预订 — / 总包间 —</div>
+        <div class="sub" id="occ-eve-sub">晚市 — / 总包间 —</div>
         <div class="occ-bar"><div class="occ-bar-fill" id="occ-eve-bar" style="width:0%"></div></div>
       </div>
       <div class="occ-card">
@@ -273,11 +273,11 @@ canvas { display: block; }
             <tr>
               <th class="c-name">门店</th>
               <th style="width:70px;text-align:center">包间数</th>
-              <th class="c-pct2">🌞午市预订</th>
+              <th class="c-pct2">🌞午市</th>
               <th class="c-pct2">午市出租率</th>
-              <th class="c-pct2">🌙晚市预订</th>
+              <th class="c-pct2">🌙晚市</th>
               <th class="c-pct2">晚市出租率</th>
-              <th class="c-pct2">合计预订</th>
+              <th class="c-pct2">合计</th>
               <th class="c-pct2">全天出租率</th>
             </tr>
           </thead>
@@ -1858,12 +1858,12 @@ function renderOccupancyTable(result, settleDate) {
 
   // 汇总卡片
   document.getElementById('occ-noon-pct').textContent    = fmtPct(noonPct);
-  document.getElementById('occ-noon-sub').textContent    = `午市预订 ${totalNoon} / 总包间 ${totalRooms}`;
+  document.getElementById('occ-noon-sub').textContent    = `午市 ${totalNoon} / 总包间 ${totalRooms}`;
   document.getElementById('occ-noon-bar').style.width    = Math.min(noonPct, 100) + '%';
   document.getElementById('occ-noon-bar').className      = 'occ-bar-fill ' + barCls(noonPct);
 
   document.getElementById('occ-eve-pct').textContent     = fmtPct(evePct);
-  document.getElementById('occ-eve-sub').textContent     = `晚市预订 ${totalEvening} / 总包间 ${totalRooms}`;
+  document.getElementById('occ-eve-sub').textContent     = `晚市 ${totalEvening} / 总包间 ${totalRooms}`;
   document.getElementById('occ-eve-bar').style.width     = Math.min(evePct, 100) + '%';
   document.getElementById('occ-eve-bar').className       = 'occ-bar-fill ' + barCls(evePct);
 
@@ -1974,7 +1974,7 @@ function exportOccupancy() {
 
   let csv = '\uFEFF';
   csv += `徽商故里出租率报表 - ${dimLabel}\n`;
-  csv += `区域,门店,包间数,午市预订,午市出租率,晚市预订,晚市出租率,合计预订,全天出租率\n`;
+  csv += `区域,门店,包间数,午市,午市出租率,晚市,晚市出租率,合计,全天出租率\n`;
 
   ALL_SHOPS.filter(s => {
     const d = shops[s.centerId];
@@ -2832,6 +2832,48 @@ window.debugHistAPI = async function(monthStr = '2025-09', shopId = 247415) {
 };
 
 // ════════ 诊断面板 ════════
+
+// 诊断：探索 getserialdata 账单结构，找出区分包间的字段
+// 用法：debugBaojianBill('247415', '2026-05-19')
+window.debugBaojianBill = async function(shopId = '247415', date = '2026-05-19') {
+  const tk = localStorage.getItem('wdtoken') || token || '';
+  const accessId = 'huiShang';
+  const centerId = 247412;
+  const baseUrl = 'https://boss.huiShang56.com';
+  const url = `${baseUrl}/datatransfer/getserialdata?centerId=${centerId}&shopId=${shopId}&settleDate=${date}&dateType=1&pageNo=1&pageSize=100`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'access_token': tk, 'accessid': accessId, 'granttype': 'client' }
+    });
+    const json = await res.json();
+    const bills = json?.data?.billList || [];
+    console.log(`[getserialdata] 共 ${bills.length} 条账单，检查所有字段...`);
+    if (bills.length === 0) { console.log('无账单数据'); return; }
+    // 打印第一条的所有 key
+    console.log('第一条账单所有字段:', Object.keys(bills[0]));
+    // 打印前5条的关键字段
+    console.log('\n前5条账单关键字段:');
+    bills.slice(0, 5).forEach((b, i) => {
+      console.log(`  [${i+1}] table_area=${b.table_area} area_type=${b.area_type} area_name=${b.area_name} room_type=${b.room_type} table_type=${b.table_type} desk_type=${b.desk_type} consume_type=${b.consume_type} shift=${b.shift} last_total=${b.last_total} book_state=${b.book_state}`);
+    });
+    // 统计各 area_type/table_area 的账单数
+    const areaCount = {};
+    const roomCount = {};
+    const shiftCount = { '午': 0, '晚': 0, '其他': 0 };
+    bills.forEach(b => {
+      const area = b.table_area || b.area_type || b.area_name || b.room_type || b.table_type || b.desk_type || '未知';
+      const rm = b.room_type || b.table_type || '未知';
+      const sh = (b.shift || '').includes('午') ? '午' : (b.shift || '').includes('晚') ? '晚' : '其他';
+      areaCount[area] = (areaCount[area] || 0) + 1;
+      roomCount[rm] = (roomCount[rm] || 0) + 1;
+      shiftCount[sh]++;
+    });
+    console.log('\nareaCount:', areaCount);
+    console.log('roomCount:', roomCount);
+    console.log('shiftCount:', shiftCount);
+  } catch(e) { console.error('诊断失败:', e); }
+};
 window.showDiagnostics = function() {
   const panel = document.getElementById('diag-panel');
   if (!panel) return;
