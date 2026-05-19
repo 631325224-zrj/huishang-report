@@ -774,6 +774,55 @@ async function queryBookOrders(shopId, beginDate, endDate) {
   return { noon, evening };
 }
 
+// 查询单门店指定日期范围非预订包间账单数（getserialdata）
+// 返回 { noon: N, evening: N }（非预订且 point_type_name 含"包间"的账单数）
+async function queryWalkInBaojian(shopId, beginDate, endDate) {
+  const cacheKey = `walkin_${shopId}_${beginDate}_${endDate}`;
+  if (OCCUPY_CACHE[cacheKey] !== undefined) return OCCUPY_CACHE[cacheKey];
+
+  let noon = 0, evening = 0;
+  try {
+    // 逐天查询（getserialdata 不支持跨天范围，必须按天查）
+    const start = new Date(beginDate);
+    const end = new Date(endDate);
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+      let pageNo = 1, hasMore = true;
+      while (hasMore) {
+        const qs = `centerId=${API_CONFIG.centerId}&shopId=${shopId}&settleDate=${dateStr}&dateType=1&pageNo=${pageNo}&pageSize=500`;
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 15000);
+        const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getserialdata?${qs}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'access_token': token, 'accessid': API_CONFIG.accessId, 'granttype': 'client' },
+          signal: controller.signal,
+        });
+        clearTimeout(tid);
+        const json = await res.json();
+        const list = json?.data?.billList || [];
+        list.forEach(b => {
+          // order_type=2 是预订单，跳过（预订已单独统计）
+          if (String(b.order_type) === '2') return;
+          // 只统计包间类型
+          const pointType = b.point_type_name || '';
+          if (!pointType.includes('包间')) return;
+          const shift = b.shift || '';
+          if (shift.includes('午')) noon++;
+          else if (shift.includes('晚')) evening++;
+        });
+        const totalPages = json?.data?.pageInfo?.pageTotal || 1;
+        if (pageNo >= totalPages) { hasMore = false; }
+        else { pageNo++; }
+      }
+    }
+  } catch (e) {
+    console.warn(`[非预订包间查询失败] 门店${shopId} ${beginDate}~${endDate}`, e.message);
+  }
+
+  OCCUPY_CACHE[cacheKey] = { noon, evening };
+  return { noon, evening };
+}
+
 // 查询指定日期所有门店出租率（dateType=1日/2月/3年）
 async function queryOccupancyAll(settleDate, dateType = 1) {
   const shopIds = ALL_SHOPS.map(s => s.centerId);
@@ -782,15 +831,25 @@ async function queryOccupancyAll(settleDate, dateType = 1) {
   const roomTasks = shopIds.map(sid => () => queryShopRooms(sid));
   const roomResults = await batchQuery(roomTasks, 1);
 
-  // 第二步：查预订数（按维度确定日期范围）
+  // 第二步：并行查预订数 + 非预订包间数（按维度确定日期范围）
   let reserveResults;
   if (dateType === 1) {
     // 日维度：查当天
-    const tasks = shopIds.map(sid => () => queryBookOrders(sid, settleDate, settleDate));
-    const rResults = await batchQuery(tasks, 3);
+    const tasks1 = shopIds.map(sid => () => queryBookOrders(sid, settleDate, settleDate));
+    const tasks2 = shopIds.map(sid => () => queryWalkInBaojian(sid, settleDate, settleDate));
+    const [r1, r2] = await Promise.all([
+      batchQuery(tasks1, 3),
+      batchQuery(tasks2, 2)  // getserialdata 较敏感，并发略降
+    ]);
     const shops = {};
     shopIds.forEach((sid, i) => {
-      shops[sid] = { ...(rResults[i] || { noon: 0, evening: 0 }), rooms: roomResults[i] || 0 };
+      const book = r1[i] || { noon: 0, evening: 0 };
+      const walk = r2[i] || { noon: 0, evening: 0 };
+      shops[sid] = {
+        noon:     book.noon     + walk.noon,
+        evening:  book.evening  + walk.evening,
+        rooms:    roomResults[i] || 0
+      };
     });
     reserveResults = { shops };
   } else if (dateType === 2) {
@@ -799,11 +858,21 @@ async function queryOccupancyAll(settleDate, dateType = 1) {
     const begin = `${year}-${month}-01`;
     const lastDay = new Date(year, month, 0).getDate();
     const end = `${year}-${month}-${p(lastDay)}`;
-    const tasks = shopIds.map(sid => () => queryBookOrders(sid, begin, end));
-    const rResults = await batchQuery(tasks, 3);
+    const tasks1 = shopIds.map(sid => () => queryBookOrders(sid, begin, end));
+    const tasks2 = shopIds.map(sid => () => queryWalkInBaojian(sid, begin, end));
+    const [r1, r2] = await Promise.all([
+      batchQuery(tasks1, 3),
+      batchQuery(tasks2, 2)
+    ]);
     const shops = {};
     shopIds.forEach((sid, i) => {
-      shops[sid] = { ...(rResults[i] || { noon: 0, evening: 0 }), rooms: roomResults[i] || 0 };
+      const book = r1[i] || { noon: 0, evening: 0 };
+      const walk = r2[i] || { noon: 0, evening: 0 };
+      shops[sid] = {
+        noon:     book.noon     + walk.noon,
+        evening:  book.evening  + walk.evening,
+        rooms:    roomResults[i] || 0
+      };
     });
     reserveResults = { shops };
   } else {
@@ -811,11 +880,21 @@ async function queryOccupancyAll(settleDate, dateType = 1) {
     const year = settleDate;
     const begin = `${year}-01-01`;
     const end = `${year}-12-31`;
-    const tasks = shopIds.map(sid => () => queryBookOrders(sid, begin, end));
-    const rResults = await batchQuery(tasks, 3);
+    const tasks1 = shopIds.map(sid => () => queryBookOrders(sid, begin, end));
+    const tasks2 = shopIds.map(sid => () => queryWalkInBaojian(sid, begin, end));
+    const [r1, r2] = await Promise.all([
+      batchQuery(tasks1, 3),
+      batchQuery(tasks2, 2)
+    ]);
     const shops = {};
     shopIds.forEach((sid, i) => {
-      shops[sid] = { ...(rResults[i] || { noon: 0, evening: 0 }), rooms: roomResults[i] || 0 };
+      const book = r1[i] || { noon: 0, evening: 0 };
+      const walk = r2[i] || { noon: 0, evening: 0 };
+      shops[sid] = {
+        noon:     book.noon     + walk.noon,
+        evening:  book.evening  + walk.evening,
+        rooms:    roomResults[i] || 0
+      };
     });
     reserveResults = { shops };
   }
@@ -2833,47 +2912,6 @@ window.debugHistAPI = async function(monthStr = '2025-09', shopId = 247415) {
 
 // ════════ 诊断面板 ════════
 
-// 诊断：探索 getserialdata 账单结构，找出区分包间的字段
-// 用法：debugBaojianBill('247415', '2026-05-19')
-window.debugBaojianBill = async function(shopId = '247415', date = '2026-05-19') {
-  const tk = localStorage.getItem('wdtoken') || token || '';
-  const accessId = 'huiShang';
-  const centerId = 247412;
-  const baseUrl = 'https://boss.huiShang56.com';
-  const url = `${baseUrl}/datatransfer/getserialdata?centerId=${centerId}&shopId=${shopId}&settleDate=${date}&dateType=1&pageNo=1&pageSize=100`;
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'access_token': tk, 'accessid': accessId, 'granttype': 'client' }
-    });
-    const json = await res.json();
-    const bills = json?.data?.billList || [];
-    console.log(`[getserialdata] 共 ${bills.length} 条账单，检查所有字段...`);
-    if (bills.length === 0) { console.log('无账单数据'); return; }
-    // 打印第一条的所有 key
-    console.log('第一条账单所有字段:', Object.keys(bills[0]));
-    // 打印前5条的关键字段
-    console.log('\n前5条账单关键字段:');
-    bills.slice(0, 5).forEach((b, i) => {
-      console.log(`  [${i+1}] table_area=${b.table_area} area_type=${b.area_type} area_name=${b.area_name} room_type=${b.room_type} table_type=${b.table_type} desk_type=${b.desk_type} consume_type=${b.consume_type} shift=${b.shift} last_total=${b.last_total} book_state=${b.book_state}`);
-    });
-    // 统计各 area_type/table_area 的账单数
-    const areaCount = {};
-    const roomCount = {};
-    const shiftCount = { '午': 0, '晚': 0, '其他': 0 };
-    bills.forEach(b => {
-      const area = b.table_area || b.area_type || b.area_name || b.room_type || b.table_type || b.desk_type || '未知';
-      const rm = b.room_type || b.table_type || '未知';
-      const sh = (b.shift || '').includes('午') ? '午' : (b.shift || '').includes('晚') ? '晚' : '其他';
-      areaCount[area] = (areaCount[area] || 0) + 1;
-      roomCount[rm] = (roomCount[rm] || 0) + 1;
-      shiftCount[sh]++;
-    });
-    console.log('\nareaCount:', areaCount);
-    console.log('roomCount:', roomCount);
-    console.log('shiftCount:', shiftCount);
-  } catch(e) { console.error('诊断失败:', e); }
-};
 window.showDiagnostics = function() {
   const panel = document.getElementById('diag-panel');
   if (!panel) return;
