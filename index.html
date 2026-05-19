@@ -927,7 +927,7 @@ function lsLoadYearlyData() {
 // 清理旧缓存
 // v23: 修正月度查询为 beginDate/endDate + dateType=1（之前 dateType=2/3 对历史年和当年均返回单日数据，非整月汇总）
 // ══════════════════════════════════════════════════════════
-const LS_CACHE_VERSION = 'v25';  // v25: 修复queryMonthBillList错误缓存bug，移除预加载改为纯按需加载
+const LS_CACHE_VERSION = 'v26';  // v26: 恢复第三阶段预加载（本年+去年全月），分批加载+单月重试，避免大量失败
 
 function lsClearOldCache() {
   // 检查是否需要清理旧缓存
@@ -1103,10 +1103,68 @@ async function loadAllData() {
   console.log(`[加载完成] 当前月 ${curMonthKey}:`, monthlyData[curMonthKey]);
 
   // ══════════════════════════════════════════════════════════
-  // 第三阶段：历史月份改为纯按需加载（用户切换月份/年报时自动加载）
-  // 不再预加载所有历史月份，避免大量请求导致失败
+  // 第三阶段：预加载本年+去年所有月份（最多24个月）
+  // 用户要求：首次加载就要能呈现本年和上一年的完整数据
+  // 策略：生成近24个月范围，利用缓存跳过已加载月份，分小批量加载避免超时
   // ══════════════════════════════════════════════════════════
-  updateProgress(100, '完成');
+  (async () => {
+    // 生成近24个月份列表（去年当前月 → 今年当前月）
+    const histMonths = [];
+    const lastYear = curYear - 1;
+    for (let m = 1; m <= 12; m++) {
+      const k = `${lastYear}-${p(m)}`;
+      if (k >= `${API_CONFIG.onlineYear}-${p(API_CONFIG.onlineMonth)}`) {
+        histMonths.push(k);
+      }
+    }
+    for (let m = 1; m <= curMonth; m++) {
+      histMonths.push(`${curYear}-${p(m)}`);
+    }
+    // 去重（当前月已在Phase2加载，不要重复）
+    const toLoad = histMonths.filter(k => k !== curMonthKey && !loadedMonths.has(k));
+    const totalToLoad = toLoad.length;
+    if (totalToLoad === 0) {
+      console.log('[第三阶段] 所有历史月份已在缓存中，跳过预加载');
+      updateProgress(100, '完成');
+      return;
+    }
+    console.log(`[第三阶段] 预加载 ${totalToLoad} 个月份（本年+去年）:`, toLoad);
+
+    // 分小批量加载，每批6个月（6月×28店=168次并发请求，分2批约30-60秒）
+    const BATCH = 6;
+    let loaded = 0;
+    for (let i = 0; i < toLoad.length; i += BATCH) {
+      const batch = toLoad.slice(i, i + BATCH);
+      const batchNum = Math.floor(i / BATCH) + 1;
+      const totalBatches = Math.ceil(toLoad.length / BATCH);
+      updateProgress(98, `预加载历史月份(${batchNum}/${totalBatches})…`);
+
+      // 并发加载本批月份
+      const promises = batch.map(async (mk) => {
+        const [y, m] = mk.split('-').map(Number);
+        try {
+          await ensureMonthData(y, m);
+          loaded++;
+          const pct = Math.round((loaded / totalToLoad) * 100);
+          updateProgress(98, `预加载历史月份(${batchNum}/${totalBatches}) ${pct}%…`);
+        } catch (e) {
+          console.warn(`[第三阶段] ${mk} 首次加载失败，将重试:`, e.message);
+          // 重试一次
+          try {
+            await new Promise(r => setTimeout(r, 2000)); // 等2秒让网络恢复
+            await ensureMonthData(y, m);
+            loaded++;
+          } catch (e2) {
+            console.error(`[第三阶段] ${mk} 重试也失败，跳过:`, e2.message);
+          }
+        }
+      });
+      await Promise.all(promises);
+    }
+    console.log(`[第三阶段] 完成，共 ${loaded}/${totalToLoad} 个月份加载成功`);
+    updateProgress(100, '完成');
+  })();
+
   // 同步 dailyData 到 DATA（monthlyData/yearlyData 等已经是 DATA 的引用）
   DATA.dailyData = dailyData;
   DATA.shopDailyData = shopDailyData;

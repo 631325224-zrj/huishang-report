@@ -1,0 +1,760 @@
+- generic [ref=e8]:
+  - generic [ref=e9]:
+    - generic [ref=e11] [cursor=pointer]:
+      - link "" [ref=e13]:
+        - /url: "#/item/index"
+        - generic [ref=e15]: 
+      - generic [ref=e17]: 餐饮7开放API--标准接口
+    - generic [ref=e19]:
+      - generic [ref=e21] [cursor=pointer]: 
+      - generic [ref=e23] [cursor=pointer]: 
+      - generic [ref=e25] [cursor=pointer]: 
+  - generic [ref=e26]:
+    - generic [ref=e27]:
+      - generic [ref=e28]:
+        - textbox "输入关键字后按回车以搜索" [ref=e29]
+        - generic [ref=e31]: 
+      - tree [ref=e32]:
+        - treeitem "  修改记录" [ref=e33]:
+          - generic [ref=e34] [cursor=pointer]:
+            - generic [ref=e35]: 
+            - generic [ref=e37]:
+              - generic [ref=e38]: 
+              - text: 修改记录
+        - treeitem "  API使用指南" [ref=e39]:
+          - generic [ref=e40] [cursor=pointer]:
+            - generic [ref=e41]: 
+            - generic [ref=e43]:
+              - generic [ref=e44]: 
+              - text: API使用指南
+        - treeitem "  授权获取" [ref=e45]:
+          - generic [ref=e46] [cursor=pointer]:
+            - generic [ref=e47]: 
+            - generic [ref=e49]:
+              - generic [ref=e50]: 
+              - text: 授权获取
+        - treeitem "  基础档案" [ref=e51]:
+          - generic [ref=e52] [cursor=pointer]:
+            - generic [ref=e53]: 
+            - generic [ref=e55]:
+              - generic [ref=e56]: 
+              - text: 基础档案
+        - treeitem "  业务数据" [expanded] [ref=e57]:
+          - generic [ref=e58] [cursor=pointer]:
+            - generic [ref=e59]: 
+            - generic [ref=e61]:
+              - generic [ref=e62]: 
+              - text: 业务数据
+          - group [ref=e63]:
+            - treeitem "  账单明细查询" [ref=e64]:
+              - generic [ref=e65] [cursor=pointer]:
+                - generic [ref=e66]: 
+                - generic [ref=e68]:
+                  - generic [ref=e69]: 
+                  - text: 账单明细查询
+            - treeitem "  账单明细查询-实时" [ref=e70]:
+              - generic [ref=e71] [cursor=pointer]:
+                - generic [ref=e72]: 
+                - generic [ref=e74]:
+                  - generic [ref=e75]: 
+                  - text: 账单明细查询-实时
+            - treeitem "  营业数据查询（商龙云和云端门店号）" [ref=e76]:
+              - generic [ref=e77] [cursor=pointer]:
+                - generic [ref=e78]: 
+                - generic [ref=e80]:
+                  - generic [ref=e81]: 
+                  - text: 营业数据查询（商龙云和云端门店号）
+            - treeitem "  预订排菜数据查询" [ref=e82]:
+              - generic [ref=e83] [cursor=pointer]:
+                - generic [ref=e84]: 
+                - generic [ref=e86]:
+                  - generic [ref=e87]: 
+                  - text: 预订排菜数据查询
+            - treeitem "  预订排菜批量数据查询" [ref=e88]:
+              - generic [ref=e89] [cursor=pointer]:
+                - generic [ref=e90]: 
+                - generic [ref=e92]:
+                  - generic [ref=e93]: 
+                  - text: 预订排菜批量数据查询
+            - treeitem "  押金明细查询" [ref=e94]:
+              - generic [ref=e95] [cursor=pointer]:
+                - generic [ref=e96]: 
+                - generic [ref=e98]:
+                  - generic [ref=e99]: 
+                  - text: 押金明细查询
+            - treeitem "  记账明细数据" [ref=e100]:
+              - generic [ref=e101] [cursor=pointer]:
+                - generic [ref=e102]: 
+                - generic [ref=e104]:
+                  - generic [ref=e105]: 
+                  - text: 记账明细数据
+            - treeitem "  退单明细" [ref=e106]:
+              - generic [ref=e107] [cursor=pointer]:
+                - generic [ref=e108]: 
+                - generic [ref=e110]:
+                  - generic [ref=e111]: 
+                  - text: 退单明细
+            - treeitem "  菜品估清明细" [ref=e112]:
+              - generic [ref=e113] [cursor=pointer]:
+                - generic [ref=e114]: 
+                - generic [ref=e116]:
+                  - generic [ref=e117]: 
+                  - text: 菜品估清明细
+            - treeitem "  挂账流水" [ref=e118]:
+              - generic [ref=e119] [cursor=pointer]:
+                - generic [ref=e120]: 
+                - generic [ref=e122]:
+                  - generic [ref=e123]: 
+                  - text: 挂账流水
+            - treeitem "  营业情况汇总" [ref=e124]:
+              - generic [ref=e125] [cursor=pointer]:
+                - generic [ref=e126]: 
+                - generic [ref=e128]:
+                  - generic [ref=e129]: 
+                  - text: 营业情况汇总
+            - treeitem "  账单主信息数据" [ref=e130]:
+              - generic [ref=e131] [cursor=pointer]:
+                - generic [ref=e132]: 
+                - generic [ref=e134]:
+                  - generic [ref=e135]: 
+                  - text: 账单主信息数据
+            - treeitem "  查询日结接口" [ref=e136]:
+              - generic [ref=e137] [cursor=pointer]:
+                - generic [ref=e138]: 
+                - generic [ref=e140]:
+                  - generic [ref=e141]: 
+                  - text: 查询日结接口
+            - treeitem "  吾享小程序会员订单查询接口" [ref=e142]:
+              - generic [ref=e143] [cursor=pointer]:
+                - generic [ref=e144]: 
+                - generic [ref=e146]:
+                  - generic [ref=e147]: 
+                  - text: 吾享小程序会员订单查询接口
+            - treeitem "  存酒单" [ref=e148]:
+              - generic [ref=e149] [cursor=pointer]:
+                - generic [ref=e150]: 
+                - generic [ref=e152]:
+                  - generic [ref=e153]: 
+                  - text: 存酒单
+            - treeitem "  预订信息明细" [ref=e154]:
+              - generic [ref=e155] [cursor=pointer]:
+                - generic [ref=e156]: 
+                - generic [ref=e158]:
+                  - generic [ref=e159]: 
+                  - text: 预订信息明细
+            - treeitem "  对账自助查询文档" [ref=e160]:
+              - generic [ref=e161] [cursor=pointer]:
+                - generic [ref=e162]: 
+                - generic [ref=e164]:
+                  - generic [ref=e165]: 
+                  - text: 对账自助查询文档
+            - treeitem "  集团预付明细" [ref=e166]:
+              - generic [ref=e167] [cursor=pointer]:
+                - generic [ref=e168]: 
+                - generic [ref=e170]:
+                  - generic [ref=e171]: 
+                  - text: 集团预付明细
+            - treeitem "  团购券接口" [ref=e172]:
+              - generic [ref=e173] [cursor=pointer]:
+                - generic [ref=e174]: 
+                - generic [ref=e176]:
+                  - generic [ref=e177]: 
+                  - text: 团购券接口
+            - treeitem "  外卖改单数据" [ref=e178]:
+              - generic [ref=e179] [cursor=pointer]:
+                - generic [ref=e180]: 
+                - generic [ref=e182]:
+                  - generic [ref=e183]: 
+                  - text: 外卖改单数据
+            - treeitem "  客位状态" [ref=e184]:
+              - generic [ref=e185] [cursor=pointer]:
+                - generic [ref=e186]: 
+                - generic [ref=e188]:
+                  - generic [ref=e189]: 
+                  - text: 客位状态
+            - treeitem "  付款修正记录" [ref=e190]:
+              - generic [ref=e191] [cursor=pointer]:
+                - generic [ref=e192]: 
+                - generic [ref=e194]:
+                  - generic [ref=e195]: 
+                  - text: 付款修正记录
+            - treeitem "  品项限量" [ref=e196]:
+              - generic [ref=e197] [cursor=pointer]:
+                - generic [ref=e198]: 
+                - generic [ref=e200]:
+                  - generic [ref=e201]: 
+                  - text: 品项限量
+        - treeitem "  商超数据" [ref=e202]:
+          - generic [ref=e203] [cursor=pointer]:
+            - generic [ref=e204]: 
+            - generic [ref=e206]:
+              - generic [ref=e207]: 
+              - text: 商超数据
+    - generic [ref=e209]:
+      - generic [ref=e210]:
+        - text: 营业情况汇总
+        - generic [ref=e212] [cursor=pointer]: 
+      - generic [ref=e215]:
+        - heading "简要描述" [level=3] [ref=e217]:
+          - text: 
+          - strong [ref=e218]: 简要描述
+        - paragraph [ref=e219]: 查询营业情况汇总数据
+        - heading "请求URL" [level=3] [ref=e220]:
+          - text: 
+          - strong [ref=e221]: 请求URL
+        - blockquote [ref=e222]:
+          - paragraph [ref=e223]:
+            - text: 正式环境
+            - text: 餐饮7
+          - list [ref=e224]:
+            - listitem [ref=e225]:
+              - code [ref=e226]: https://cysms.wuuxiang.com/api/datatransfer/getBusinessSituation
+        - heading "请求方式" [level=3] [ref=e227]:
+          - text: 
+          - strong [ref=e228]: 请求方式
+        - list [ref=e229]:
+          - listitem [ref=e230]: POST
+        - heading "请求样例" [level=3] [ref=e231]:
+          - text: 
+          - strong [ref=e232]: 请求样例
+        - list [ref=e233]:
+          - listitem [ref=e234]:
+            - code [ref=e235]: https://cysms.wuuxiang.com/api/datatransfer/getBusinessSituation?centerId=98&shopId=990&settleDate=2022-08-24&beginDate=2022-08-26 06:00:00&endDate=2022-09-05 06:00:00
+        - heading "postman图例" [level=3] [ref=e236]:
+          - text: 
+          - strong [ref=e237]: postman图例
+        - paragraph [ref=e238]
+        - table [ref=e240]:
+          - rowgroup [ref=e241]:
+            - row "日期 修改人 涉及接口 备注" [ref=e242]:
+              - columnheader "日期" [ref=e243]
+              - columnheader "修改人" [ref=e244]
+              - columnheader "涉及接口" [ref=e245]
+              - columnheader "备注" [ref=e246]
+          - rowgroup [ref=e247]:
+            - row "2022.09.06 张园园 getBusinessSituation 新建接口" [ref=e248]:
+              - cell "2022.09.06" [ref=e249]
+              - cell "张园园" [ref=e250]
+              - cell "getBusinessSituation" [ref=e251]
+              - cell "新建接口" [ref=e252]
+        - heading "Header参数" [level=3] [ref=e253]:
+          - text: 
+          - strong [ref=e254]: Header参数
+        - table [ref=e256]:
+          - rowgroup [ref=e257]:
+            - row "参数名 必选 类型 说明" [ref=e258]:
+              - columnheader "参数名" [ref=e259]
+              - columnheader "必选" [ref=e260]
+              - columnheader "类型" [ref=e261]
+              - columnheader "说明" [ref=e262]
+          - rowgroup [ref=e263]:
+            - row "access_token 是 string 授权令牌" [ref=e264]:
+              - cell "access_token" [ref=e265]
+              - cell "是" [ref=e266]
+              - cell "string" [ref=e267]
+              - cell "授权令牌" [ref=e268]
+            - row "accessid 是 string 授权Id" [ref=e269]:
+              - cell "accessid" [ref=e270]
+              - cell "是" [ref=e271]
+              - cell "string" [ref=e272]
+              - cell "授权Id" [ref=e273]
+            - row "granttype 是 string 授权类型 当前填：client" [ref=e274]:
+              - cell "granttype" [ref=e275]
+              - cell "是" [ref=e276]
+              - cell "string" [ref=e277]
+              - cell "授权类型 当前填：client" [ref=e278]
+        - heading "查询参数" [level=3] [ref=e279]:
+          - text: 
+          - strong [ref=e280]: 查询参数
+        - table [ref=e282]:
+          - rowgroup [ref=e283]:
+            - row "参数名 必选 类型 说明" [ref=e284]:
+              - columnheader "参数名" [ref=e285]
+              - columnheader "必选" [ref=e286]
+              - columnheader "类型" [ref=e287]
+              - columnheader "说明" [ref=e288]
+          - rowgroup [ref=e289]:
+            - row "centerId 是 string 餐饮集团ID" [ref=e290]:
+              - cell "centerId" [ref=e291]
+              - cell "是" [ref=e292]
+              - cell "string" [ref=e293]
+              - cell "餐饮集团ID" [ref=e294]
+            - row "shopId 是 string 门店ID" [ref=e295]:
+              - cell "shopId" [ref=e296]
+              - cell "是" [ref=e297]
+              - cell "string" [ref=e298]
+              - cell "门店ID" [ref=e299]
+            - row "beginDate 否 string 开始时间 格式：yyyy-MM-dd HH:mm:ss" [ref=e300]:
+              - cell "beginDate" [ref=e301]
+              - cell "否" [ref=e302]
+              - cell "string" [ref=e303]
+              - cell "开始时间 格式：yyyy-MM-dd HH:mm:ss" [ref=e304]:
+                - text: 开始时间
+                - text: 格式：yyyy-MM-dd HH:mm:ss
+            - row "endDate 否 string 结束时间 格式：yyyy-MM-dd HH:mm:ss （填写了beginDate，则endDate必填）" [ref=e305]:
+              - cell "endDate" [ref=e306]
+              - cell "否" [ref=e307]
+              - cell "string" [ref=e308]
+              - cell "结束时间 格式：yyyy-MM-dd HH:mm:ss （填写了beginDate，则endDate必填）" [ref=e309]:
+                - text: 结束时间
+                - text: 格式：yyyy-MM-dd HH:mm:ss
+                - text: （填写了beginDate，则endDate必填）
+            - row "settleDate 否 string 营业日期 格式：yyyy-MM-dd （beginDate和settleDate都填写的情况下，按照settleDate进行查询）" [ref=e310]:
+              - cell "settleDate" [ref=e311]
+              - cell "否" [ref=e312]
+              - cell "string" [ref=e313]
+              - cell "营业日期 格式：yyyy-MM-dd （beginDate和settleDate都填写的情况下，按照settleDate进行查询）" [ref=e314]:
+                - text: 营业日期
+                - text: 格式：yyyy-MM-dd
+                - text: （beginDate和settleDate都填写的情况下，按照settleDate进行查询）
+            - row "dateType 否 string 营业日期类型 日期类型：1按自然日查询 2按营业日查询 （填写了settleDate，则dateType必填）" [ref=e315]:
+              - cell "dateType" [ref=e316]
+              - cell "否" [ref=e317]
+              - cell "string" [ref=e318]
+              - cell "营业日期类型 日期类型：1按自然日查询 2按营业日查询 （填写了settleDate，则dateType必填）" [ref=e319]:
+                - text: 营业日期类型
+                - text: 日期类型：1按自然日查询 2按营业日查询
+                - text: （填写了settleDate，则dateType必填）
+            - row "saleType 否 Integer 销售类型:1堂食、2 外带、3外卖、4自提" [ref=e320]:
+              - cell "saleType" [ref=e321]
+              - cell "否" [ref=e322]
+              - cell "Integer" [ref=e323]
+              - cell "销售类型:1堂食、2 外带、3外卖、4自提" [ref=e324]
+            - row "itemType 否 Integer 品项类型：0正常品项、1套餐、2套餐明细、10正常品项+套餐、20正常品项+套餐明细" [ref=e325]:
+              - cell "itemType" [ref=e326]
+              - cell "否" [ref=e327]
+              - cell "Integer" [ref=e328]
+              - cell "品项类型：0正常品项、1套餐、2套餐明细、10正常品项+套餐、20正常品项+套餐明细" [ref=e329]
+            - row "itemClassType 否 Integer 类别统计:0按大类(默认)、1按小类、2按销售收入类别" [ref=e330]:
+              - cell "itemClassType" [ref=e331]
+              - cell "否" [ref=e332]
+              - cell "Integer" [ref=e333]
+              - cell "类别统计:0按大类(默认)、1按小类、2按销售收入类别" [ref=e334]
+            - row "discounted 否 boolean 按折后计算" [ref=e335]:
+              - cell "discounted" [ref=e336]
+              - cell "否" [ref=e337]
+              - cell "boolean" [ref=e338]
+              - cell "按折后计算" [ref=e339]
+            - row "isDiscIncludeNotIncome 否 boolean 非收计入优惠" [ref=e340]:
+              - cell "isDiscIncludeNotIncome" [ref=e341]
+              - cell "否" [ref=e342]
+              - cell "boolean" [ref=e343]
+              - cell "非收计入优惠" [ref=e344]
+        - heading "返回参数说明" [level=3] [ref=e345]:
+          - text: 
+          - strong [ref=e346]: 返回参数说明
+        - table [ref=e348]:
+          - rowgroup [ref=e349]:
+            - row "参数名 说明 备注" [ref=e350]:
+              - columnheader "参数名" [ref=e351]
+              - columnheader "说明" [ref=e352]
+              - columnheader "备注" [ref=e353]
+          - rowgroup [ref=e354]:
+            - row "code 处理结果标识 0：成功；-1或其它：失败" [ref=e355]:
+              - cell "code" [ref=e356]
+              - cell "处理结果标识" [ref=e357]
+              - cell "0：成功；-1或其它：失败" [ref=e358]
+            - row "data 返回数据 json格式" [ref=e359]:
+              - cell "data" [ref=e360]
+              - cell "返回数据" [ref=e361]
+              - cell "json格式" [ref=e362]
+            - row "msg 返回信息 成功则为：success，失败会提示相应信息" [ref=e363]:
+              - cell "msg" [ref=e364]
+              - cell "返回信息" [ref=e365]
+              - cell "成功则为：success，失败会提示相应信息" [ref=e366]
+            - row "businessData 营业情况" [ref=e367]:
+              - cell "businessData" [ref=e368]:
+                - strong [ref=e369]: businessData
+              - cell "营业情况" [ref=e370]
+              - cell [ref=e371]
+            - row "notIncome 非收入金额" [ref=e372]:
+              - cell "notIncome" [ref=e373]:
+                - strong [ref=e374]: notIncome
+              - cell "非收入金额" [ref=e375]
+              - cell [ref=e376]
+            - row "income 纯收金额" [ref=e377]:
+              - cell "income" [ref=e378]:
+                - strong [ref=e379]: income
+              - cell "纯收金额" [ref=e380]
+              - cell [ref=e381]
+            - row "operateData 经营指标" [ref=e382]:
+              - cell "operateData" [ref=e383]:
+                - strong [ref=e384]: operateData
+              - cell "经营指标" [ref=e385]
+              - cell [ref=e386]
+            - row "otherData 其它" [ref=e387]:
+              - cell "otherData" [ref=e388]:
+                - strong [ref=e389]: otherData
+              - cell "其它" [ref=e390]
+              - cell [ref=e391]
+            - row "shiftData 市别" [ref=e392]:
+              - cell "shiftData" [ref=e393]:
+                - strong [ref=e394]: shiftData
+              - cell "市别" [ref=e395]
+              - cell [ref=e396]
+            - row "discRate 折扣率" [ref=e397]:
+              - cell "discRate" [ref=e398]:
+                - strong [ref=e399]: discRate
+              - cell "折扣率" [ref=e400]
+              - cell [ref=e401]
+            - row "classTypeData 类别销售" [ref=e402]:
+              - cell "classTypeData" [ref=e403]:
+                - strong [ref=e404]: classTypeData
+              - cell "类别销售" [ref=e405]
+              - cell [ref=e406]
+            - row "saleTypeData 销售类型" [ref=e407]:
+              - cell "saleTypeData" [ref=e408]:
+                - strong [ref=e409]: saleTypeData
+              - cell "销售类型" [ref=e410]
+              - cell [ref=e411]
+            - row "meetAndReceivableData 应收应付" [ref=e412]:
+              - cell "meetAndReceivableData" [ref=e413]:
+                - strong [ref=e414]: meetAndReceivableData
+              - cell "应收应付" [ref=e415]
+              - cell [ref=e416]
+        - heading "营业情况信息businessData" [level=4] [ref=e417]:  营业情况信息businessData
+        - table [ref=e419]:
+          - rowgroup [ref=e420]:
+            - row "参数名 说明 类型 备注" [ref=e421]:
+              - columnheader "参数名" [ref=e422]
+              - columnheader "说明" [ref=e423]
+              - columnheader "类型" [ref=e424]
+              - columnheader "备注" [ref=e425]
+          - rowgroup [ref=e426]:
+            - row "orig 营业额 Long" [ref=e427]:
+              - cell "orig" [ref=e428]
+              - cell "营业额" [ref=e429]
+              - cell "Long" [ref=e430]
+              - cell [ref=e431]
+            - row "last 营业收入 Long" [ref=e432]:
+              - cell "last" [ref=e433]
+              - cell "营业收入" [ref=e434]
+              - cell "Long" [ref=e435]
+              - cell [ref=e436]
+            - row "itemOrig 品项消费 Long" [ref=e437]:
+              - cell "itemOrig" [ref=e438]
+              - cell "品项消费" [ref=e439]
+              - cell "Long" [ref=e440]
+              - cell [ref=e441]
+            - row "origServerFee 服务费 Long" [ref=e442]:
+              - cell "origServerFee" [ref=e443]
+              - cell "服务费" [ref=e444]
+              - cell "Long" [ref=e445]
+              - cell [ref=e446]
+            - row "origZdxfbq 最低消费补齐 Long" [ref=e447]:
+              - cell "origZdxfbq" [ref=e448]
+              - cell "最低消费补齐" [ref=e449]
+              - cell "Long" [ref=e450]
+              - cell [ref=e451]
+            - row "discTotal 优惠合计金额 Long 此项为以下六项优惠金额的合计值： disc：折扣优惠金额、 rptBsDisc：定额优惠金额、 present：赠送优惠金额、 member：会员价优惠金额、 promote：促销优惠金额、 wipe：抹零金额" [ref=e452]:
+              - cell "discTotal" [ref=e453]
+              - cell "优惠合计金额" [ref=e454]
+              - cell "Long" [ref=e455]
+              - cell "此项为以下六项优惠金额的合计值： disc：折扣优惠金额、 rptBsDisc：定额优惠金额、 present：赠送优惠金额、 member：会员价优惠金额、 promote：促销优惠金额、 wipe：抹零金额" [ref=e456]:
+                - text: 此项为以下六项优惠金额的合计值： disc：折扣优惠金额、
+                - text: rptBsDisc：定额优惠金额、
+                - text: present：赠送优惠金额、
+                - text: member：会员价优惠金额、
+                - text: promote：促销优惠金额、
+                - text: wipe：抹零金额
+            - row "member 会员价优惠金额 Long" [ref=e457]:
+              - cell "member" [ref=e458]
+              - cell "会员价优惠金额" [ref=e459]
+              - cell "Long" [ref=e460]
+              - cell [ref=e461]
+            - row "promote 促销优惠金额 Long" [ref=e462]:
+              - cell "promote" [ref=e463]
+              - cell "促销优惠金额" [ref=e464]
+              - cell "Long" [ref=e465]
+              - cell [ref=e466]
+            - row "present 赠送优惠金额 Long" [ref=e467]:
+              - cell "present" [ref=e468]
+              - cell "赠送优惠金额" [ref=e469]
+              - cell "Long" [ref=e470]
+              - cell [ref=e471]
+            - row "disc 折扣优惠金额 Long" [ref=e472]:
+              - cell "disc" [ref=e473]
+              - cell "折扣优惠金额" [ref=e474]
+              - cell "Long" [ref=e475]
+              - cell [ref=e476]
+            - row "rptBsDisc 定额优惠金额 Long" [ref=e477]:
+              - cell "rptBsDisc" [ref=e478]
+              - cell "定额优惠金额" [ref=e479]
+              - cell "Long" [ref=e480]
+              - cell [ref=e481]
+            - row "wipe 抹零金额 Long" [ref=e482]:
+              - cell "wipe" [ref=e483]
+              - cell "抹零金额" [ref=e484]
+              - cell "Long" [ref=e485]
+              - cell [ref=e486]
+        - heading "非收入金额notIncome" [level=4] [ref=e487]:  非收入金额notIncome
+        - table [ref=e489]:
+          - rowgroup [ref=e490]:
+            - row "参数名 说明 类型 备注" [ref=e491]:
+              - columnheader "参数名" [ref=e492]
+              - columnheader "说明" [ref=e493]
+              - columnheader "类型" [ref=e494]
+              - columnheader "备注" [ref=e495]
+          - rowgroup [ref=e496]:
+            - row "notIncomeTotal 非收入金额 double" [ref=e497]:
+              - cell "notIncomeTotal" [ref=e498]
+              - cell "非收入金额" [ref=e499]
+              - cell "double" [ref=e500]
+              - cell [ref=e501]
+            - row "notIncomeList 非收支付方式列表 list 此项为非收list<Map>,其中map的中的数据： paywayName：支付方式名称、notIncome：非收金额,paywayId：支付方式Id,paywayCode：支付方式Code" [ref=e502]:
+              - cell "notIncomeList" [ref=e503]
+              - cell "非收支付方式列表" [ref=e504]
+              - cell "list" [ref=e505]
+              - cell "此项为非收list<Map>,其中map的中的数据： paywayName：支付方式名称、notIncome：非收金额,paywayId：支付方式Id,paywayCode：支付方式Code" [ref=e506]
+        - heading "纯收金额income" [level=4] [ref=e507]:  纯收金额income
+        - table [ref=e509]:
+          - rowgroup [ref=e510]:
+            - row "参数名 说明 类型 备注" [ref=e511]:
+              - columnheader "参数名" [ref=e512]
+              - columnheader "说明" [ref=e513]
+              - columnheader "类型" [ref=e514]
+              - columnheader "备注" [ref=e515]
+          - rowgroup [ref=e516]:
+            - row "incomeTotal 纯收金额 double" [ref=e517]:
+              - cell "incomeTotal" [ref=e518]
+              - cell "纯收金额" [ref=e519]
+              - cell "double" [ref=e520]
+              - cell [ref=e521]
+            - row "incomeList 纯收支付方式列表 list 此项为纯收list<Map>,其中map的中的数据： paywayName：支付方式名称、income：纯收金额,paywayId：支付方式Id,paywayCode：支付方式Code" [ref=e522]:
+              - cell "incomeList" [ref=e523]
+              - cell "纯收支付方式列表" [ref=e524]
+              - cell "list" [ref=e525]
+              - cell "此项为纯收list<Map>,其中map的中的数据： paywayName：支付方式名称、income：纯收金额,paywayId：支付方式Id,paywayCode：支付方式Code" [ref=e526]
+        - heading "经营指标operateData" [level=4] [ref=e527]:  经营指标operateData
+        - table [ref=e529]:
+          - rowgroup [ref=e530]:
+            - row "参数名 类型 说明 备注" [ref=e531]:
+              - columnheader "参数名" [ref=e532]
+              - columnheader "类型" [ref=e533]
+              - columnheader "说明" [ref=e534]
+              - columnheader "备注" [ref=e535]
+          - rowgroup [ref=e536]:
+            - row "count Long 账单数" [ref=e537]:
+              - cell "count" [ref=e538]
+              - cell "Long" [ref=e539]
+              - cell "账单数" [ref=e540]
+              - cell [ref=e541]
+            - row "bsCount Long 开台数" [ref=e542]:
+              - cell "bsCount" [ref=e543]
+              - cell "Long" [ref=e544]
+              - cell "开台数" [ref=e545]
+              - cell [ref=e546]
+            - row "people Long 客流量" [ref=e547]:
+              - cell "people" [ref=e548]
+              - cell "Long" [ref=e549]
+              - cell "客流量" [ref=e550]
+              - cell [ref=e551]
+            - row "avgBs Long 单均消费" [ref=e552]:
+              - cell "avgBs" [ref=e553]
+              - cell "Long" [ref=e554]
+              - cell "单均消费" [ref=e555]
+              - cell [ref=e556]
+            - row "avgTable Long 桌均消费" [ref=e557]:
+              - cell "avgTable" [ref=e558]
+              - cell "Long" [ref=e559]
+              - cell "桌均消费" [ref=e560]
+              - cell [ref=e561]
+            - row "avgPeople Long 人均消费" [ref=e562]:
+              - cell "avgPeople" [ref=e563]
+              - cell "Long" [ref=e564]
+              - cell "人均消费" [ref=e565]
+              - cell [ref=e566]
+            - row "countRate String 开台率 开台率 = 开台数 / (客位数 × 查询时间段内有营业的市别总数) × 100%" [ref=e567]:
+              - cell "countRate" [ref=e568]
+              - cell "String" [ref=e569]
+              - cell "开台率" [ref=e570]
+              - cell "开台率 = 开台数 / (客位数 × 查询时间段内有营业的市别总数) × 100%" [ref=e571]
+            - row "pointRate String 上座率 上座率 = 客流量 / (客座数 × 查询时间段内有营业的市别总数) × 100%" [ref=e572]:
+              - cell "pointRate" [ref=e573]
+              - cell "String" [ref=e574]
+              - cell "上座率" [ref=e575]
+              - cell "上座率 = 客流量 / (客座数 × 查询时间段内有营业的市别总数) × 100%" [ref=e576]
+            - row "overRate String 翻台率 翻台率 = (开台数 - 客位数 × 查询时间段内有营业的市别总数) / (客位数 × 查询时间段内有营业的市别总数) × 100% ；翻台率负值默认显示为0" [ref=e577]:
+              - cell "overRate" [ref=e578]
+              - cell "String" [ref=e579]
+              - cell "翻台率" [ref=e580]
+              - cell "翻台率 = (开台数 - 客位数 × 查询时间段内有营业的市别总数) / (客位数 × 查询时间段内有营业的市别总数) × 100% ；翻台率负值默认显示为0" [ref=e581]
+            - row "avgDinnerTime Decimal 平均就餐时间" [ref=e582]:
+              - cell "avgDinnerTime" [ref=e583]
+              - cell "Decimal" [ref=e584]
+              - cell "平均就餐时间" [ref=e585]
+              - cell [ref=e586]
+            - row "avgArea Decimal 平效" [ref=e587]:
+              - cell "avgArea" [ref=e588]
+              - cell "Decimal" [ref=e589]
+              - cell "平效" [ref=e590]
+              - cell [ref=e591]
+            - row "avgEmp Decimal 人效" [ref=e592]:
+              - cell "avgEmp" [ref=e593]
+              - cell "Decimal" [ref=e594]
+              - cell "人效" [ref=e595]
+              - cell [ref=e596]
+        - list [ref=e597]:
+          - listitem [ref=e598]: 客位数 = 客位档案中销售类型为【堂食】的客位数量
+          - listitem [ref=e599]:
+            - text: 客座数 = 客位容纳总人数是销售类型为【堂食】的客位默认容纳人数（defCapacity）的合计
+            - text: 以上信息可从
+            - link "客位列表" [ref=e600] [cursor=pointer]:
+              - /url: https://doc.wuuxiang.com/showdoc/web/#/46/6642
+            - text: pointList（客位列表）接口中获取。
+        - heading "其它otherData" [level=4] [ref=e601]:  其它otherData
+        - table [ref=e603]:
+          - rowgroup [ref=e604]:
+            - row "参数名 说明 类型 备注" [ref=e605]:
+              - columnheader "参数名" [ref=e606]
+              - columnheader "说明" [ref=e607]
+              - columnheader "类型" [ref=e608]
+              - columnheader "备注" [ref=e609]
+          - rowgroup [ref=e610]:
+            - row "cancel 退单金额 double" [ref=e611]:
+              - cell "cancel" [ref=e612]
+              - cell "退单金额" [ref=e613]
+              - cell "double" [ref=e614]
+              - cell [ref=e615]
+            - row "fdMoney 废单金额 double" [ref=e616]:
+              - cell "fdMoney" [ref=e617]
+              - cell "废单金额" [ref=e618]
+              - cell "double" [ref=e619]
+              - cell [ref=e620]
+            - row "invoice 发票金额 double" [ref=e621]:
+              - cell "invoice" [ref=e622]
+              - cell "发票金额" [ref=e623]
+              - cell "double" [ref=e624]
+              - cell [ref=e625]
+        - heading "市别shiftData" [level=4] [ref=e626]:  市别shiftData
+        - table [ref=e628]:
+          - rowgroup [ref=e629]:
+            - row "参数名 说明 类型 备注" [ref=e630]:
+              - columnheader "参数名" [ref=e631]
+              - columnheader "说明" [ref=e632]
+              - columnheader "类型" [ref=e633]
+              - columnheader "备注" [ref=e634]
+          - rowgroup [ref=e635]:
+            - row "origTotal 市别应收金额合计 double" [ref=e636]:
+              - cell "origTotal" [ref=e637]
+              - cell "市别应收金额合计" [ref=e638]
+              - cell "double" [ref=e639]
+              - cell [ref=e640]
+            - row "lastTotal 市别实收金额合计 double" [ref=e641]:
+              - cell "lastTotal" [ref=e642]
+              - cell "市别实收金额合计" [ref=e643]
+              - cell "double" [ref=e644]
+              - cell [ref=e645]
+            - row "shiftList 市别收入列表 list 此项为非收list<Map>,其中map的中的数据： shiftName：市别名称、orig：市别应收、last：市别实收" [ref=e646]:
+              - cell "shiftList" [ref=e647]
+              - cell "市别收入列表" [ref=e648]
+              - cell "list" [ref=e649]
+              - cell "此项为非收list<Map>,其中map的中的数据： shiftName：市别名称、orig：市别应收、last：市别实收" [ref=e650]
+        - heading "折扣率discRate" [level=4] [ref=e651]:  折扣率discRate
+        - table [ref=e653]:
+          - rowgroup [ref=e654]:
+            - row "参数名 说明 类型 备注" [ref=e655]:
+              - columnheader "参数名" [ref=e656]
+              - columnheader "说明" [ref=e657]
+              - columnheader "类型" [ref=e658]
+              - columnheader "备注" [ref=e659]
+          - rowgroup [ref=e660]:
+            - row "discRate 折扣率 String" [ref=e661]:
+              - cell "discRate" [ref=e662]
+              - cell "折扣率" [ref=e663]
+              - cell "String" [ref=e664]
+              - cell [ref=e665]
+        - heading "类别销售classTypeData" [level=4] [ref=e666]:  类别销售classTypeData
+        - table [ref=e668]:
+          - rowgroup [ref=e669]:
+            - row "参数名 说明 类型 备注" [ref=e670]:
+              - columnheader "参数名" [ref=e671]
+              - columnheader "说明" [ref=e672]
+              - columnheader "类型" [ref=e673]
+              - columnheader "备注" [ref=e674]
+          - rowgroup [ref=e675]:
+            - row "origTotal 类别应收总计 double 默认大类,根据itemClassType 入参决定需要汇总的 大类/小类/按销售收入类别" [ref=e676]:
+              - cell "origTotal" [ref=e677]
+              - cell "类别应收总计" [ref=e678]
+              - cell "double" [ref=e679]
+              - cell "默认大类,根据itemClassType 入参决定需要汇总的 大类/小类/按销售收入类别" [ref=e680]
+            - row "lastTotal 类别实收总计 double" [ref=e681]:
+              - cell "lastTotal" [ref=e682]
+              - cell "类别实收总计" [ref=e683]
+              - cell "double" [ref=e684]
+              - cell [ref=e685]
+            - row "incomeTotal 类别纯收总计 double" [ref=e686]:
+              - cell "incomeTotal" [ref=e687]
+              - cell "类别纯收总计" [ref=e688]
+              - cell "double" [ref=e689]
+              - cell [ref=e690]
+            - row "classTypelist 类别收入列表 list 此项为非收list<Map>,其中map的中的数据： className：类别名称、classId：类别id、classCode：类别code、orig：类别应收、last：类别实收、income：类别纯收" [ref=e691]:
+              - cell "classTypelist" [ref=e692]
+              - cell "类别收入列表" [ref=e693]
+              - cell "list" [ref=e694]
+              - cell "此项为非收list<Map>,其中map的中的数据： className：类别名称、classId：类别id、classCode：类别code、orig：类别应收、last：类别实收、income：类别纯收" [ref=e695]
+        - heading "销售类型saleTypeData" [level=4] [ref=e696]:  销售类型saleTypeData
+        - table [ref=e698]:
+          - rowgroup [ref=e699]:
+            - row "参数名 说明 类型 备注" [ref=e700]:
+              - columnheader "参数名" [ref=e701]
+              - columnheader "说明" [ref=e702]
+              - columnheader "类型" [ref=e703]
+              - columnheader "备注" [ref=e704]
+          - rowgroup [ref=e705]:
+            - row "saleTypeName 销售类型名称 double" [ref=e706]:
+              - cell "saleTypeName" [ref=e707]
+              - cell "销售类型名称" [ref=e708]
+              - cell "double" [ref=e709]
+              - cell [ref=e710]
+            - row "saleTypeCount 销售类型单数 double" [ref=e711]:
+              - cell "saleTypeCount" [ref=e712]
+              - cell "销售类型单数" [ref=e713]
+              - cell "double" [ref=e714]
+              - cell [ref=e715]
+            - row "saleTypeLast 销售类型实收 double" [ref=e716]:
+              - cell "saleTypeLast" [ref=e717]
+              - cell "销售类型实收" [ref=e718]
+              - cell "double" [ref=e719]
+              - cell [ref=e720]
+            - row "saleTypeRate 销售类型占比 String" [ref=e721]:
+              - cell "saleTypeRate" [ref=e722]
+              - cell "销售类型占比" [ref=e723]
+              - cell "String" [ref=e724]
+              - cell [ref=e725]
+        - heading "应收应付meetAndReceivableData" [level=4] [ref=e726]:  应收应付meetAndReceivableData
+        - table [ref=e728]:
+          - rowgroup [ref=e729]:
+            - row "参数名 说明 类型 备注" [ref=e730]:
+              - columnheader "参数名" [ref=e731]
+              - columnheader "说明" [ref=e732]
+              - columnheader "类型" [ref=e733]
+              - columnheader "备注" [ref=e734]
+          - rowgroup [ref=e735]:
+            - row "unpaidMoney 挂账金额 double" [ref=e736]:
+              - cell "unpaidMoney" [ref=e737]
+              - cell "挂账金额" [ref=e738]
+              - cell "double" [ref=e739]
+              - cell [ref=e740]
+            - row "paidMoney 还款金额 double" [ref=e741]:
+              - cell "paidMoney" [ref=e742]
+              - cell "还款金额" [ref=e743]
+              - cell "double" [ref=e744]
+              - cell [ref=e745]
+            - row "discountMoney 还款优惠 double" [ref=e746]:
+              - cell "discountMoney" [ref=e747]
+              - cell "还款优惠" [ref=e748]
+              - cell "double" [ref=e749]
+              - cell [ref=e750]
+        - paragraph [ref=e751]:
+          - strong [ref=e752]: 返回示例
+        - code [ref=e754]: "{ \"code\": \"0\", \"msg\": \"成功\", \"data\": { \"List\": { \"income\": { \"incomeTotal\": 938.00, \"incomeList\": [ { \"incomeMoney\": 938.00, \"paywayName\": \"宴请CCY\" } ] }, \"operateData\": { \"avgPeople\": 7.09, \"avgEmp\": 7.09, \"count\": 7.00, \"bsCount\": 1.00, \"dinnerTimeRate\": 330.00, \"overRate\": \"0%\", \"avgArea\": 127.75, \"people\": 20.00, \"avgBs\": 264.50, \"avgTable\": 141.80, \"countRate\": \"0.64%\", \"pointRate\": \"4.57%\" }, \"meetAndReceivableData\": null, \"businessData\": { \"origServerFee\": 52.70, \"wipe\": -0.30, \"promote\": 298.80, \"last\": 938.00, \"origZdxfbq\": 358.00, \"orig\": 1851.50, \"discTotal\": 913.50, \"member\": 0.00, \"rptBsDisc\": 0.00, \"itemOrig\": 1440.80, \"disc\": 0.00, \"present\": 615.00 }, \"otherData\": { \"cancel\": 0.00, \"fdMoney\": 0.00, \"invoice\": 0.00 }, \"notIncome\": { \"notIncomeList\": [], \"notIncomeTotal\": 0.00 }, \"saleTypeData\": [ { \"saleTypeLast\": 42.00, \"saleTypeName\": \"堂食\", \"saleTypeCount\": 1, \"saleTypeRate\": \"4.48%\" }, { \"saleTypeLast\": 787.00, \"saleTypeName\": \"外带\", \"saleTypeCount\": 5, \"saleTypeRate\": \"83.90%\" }, { \"saleTypeLast\": 109.00, \"saleTypeName\": \"外卖\", \"saleTypeCount\": 1, \"saleTypeRate\": \"11.62%\" }, { \"saleTypeLast\": 0.00, \"saleTypeName\": \"自提\", \"saleTypeCount\": 0, \"saleTypeRate\": \"0.00%\" } ], \"shiftData\": { \"origTotal\": 1851.50, \"shiftList\": [ { \"shiftName\": \"晚市\", \"last\": 938.0000, \"orig\": 1851.5000 } ], \"lastTotal\": 938.00 }, \"discRate\": \"49.34%\", \"classTypeData\": { \"origTotal\": 1738.60, \"classTypelist\": [ { \"last\": 77.07, \"orig\": 77.00, \"className\": \"魏小璐大类\" }, { \"last\": 549.33, \"orig\": 1661.60, \"className\": \"大类CCY\" } ], \"lastTotal\": 626.40 } } }, \"success\": true }"
+        - paragraph [ref=e755]:
+          - strong [ref=e756]: 备注
+          - strong [ref=e757]: 常见问题
+          - text: 1.接口返回
+          - strong [ref=e758]: 当前请求的集团号未被授权或已超过授权期限
+          - text: "?"
+          - text: "处理方法:"
+          - text: 1.检查请求参数中的centerId填写的是否正确.
+          - text: 2.授权已经到期,请联系负责人.

@@ -1,0 +1,498 @@
+- generic [ref=e8]:
+  - generic [ref=e9]:
+    - generic [ref=e11] [cursor=pointer]:
+      - link "" [ref=e13]:
+        - /url: "#/item/index"
+        - generic [ref=e15]: 
+      - generic [ref=e17]: 餐饮7开放API--标准接口
+    - generic [ref=e19]:
+      - generic [ref=e21] [cursor=pointer]: 
+      - generic [ref=e23] [cursor=pointer]: 
+      - generic [ref=e25] [cursor=pointer]: 
+  - generic [ref=e26]:
+    - generic [ref=e27]:
+      - generic [ref=e28]:
+        - textbox "输入关键字后按回车以搜索" [ref=e29]
+        - generic [ref=e31]: 
+      - tree [ref=e32]:
+        - treeitem "  修改记录" [ref=e33]:
+          - generic [ref=e34] [cursor=pointer]:
+            - generic [ref=e35]: 
+            - generic [ref=e37]:
+              - generic [ref=e38]: 
+              - text: 修改记录
+        - treeitem "  API使用指南" [ref=e39]:
+          - generic [ref=e40] [cursor=pointer]:
+            - generic [ref=e41]: 
+            - generic [ref=e43]:
+              - generic [ref=e44]: 
+              - text: API使用指南
+        - treeitem "  授权获取" [ref=e45]:
+          - generic [ref=e46] [cursor=pointer]:
+            - generic [ref=e47]: 
+            - generic [ref=e49]:
+              - generic [ref=e50]: 
+              - text: 授权获取
+        - treeitem "  基础档案" [ref=e51]:
+          - generic [ref=e52] [cursor=pointer]:
+            - generic [ref=e53]: 
+            - generic [ref=e55]:
+              - generic [ref=e56]: 
+              - text: 基础档案
+        - treeitem "  业务数据" [expanded] [ref=e57]:
+          - generic [ref=e58] [cursor=pointer]:
+            - generic [ref=e59]: 
+            - generic [ref=e61]:
+              - generic [ref=e62]: 
+              - text: 业务数据
+          - group [ref=e63]:
+            - treeitem "  账单明细查询" [ref=e64]:
+              - generic [ref=e65] [cursor=pointer]:
+                - generic [ref=e66]: 
+                - generic [ref=e68]:
+                  - generic [ref=e69]: 
+                  - text: 账单明细查询
+            - treeitem "  账单明细查询-实时" [ref=e70]:
+              - generic [ref=e71] [cursor=pointer]:
+                - generic [ref=e72]: 
+                - generic [ref=e74]:
+                  - generic [ref=e75]: 
+                  - text: 账单明细查询-实时
+            - treeitem "  营业数据查询（商龙云和云端门店号）" [ref=e76]:
+              - generic [ref=e77] [cursor=pointer]:
+                - generic [ref=e78]: 
+                - generic [ref=e80]:
+                  - generic [ref=e81]: 
+                  - text: 营业数据查询（商龙云和云端门店号）
+            - treeitem "  预订排菜数据查询" [ref=e82]:
+              - generic [ref=e83] [cursor=pointer]:
+                - generic [ref=e84]: 
+                - generic [ref=e86]:
+                  - generic [ref=e87]: 
+                  - text: 预订排菜数据查询
+            - treeitem "  预订排菜批量数据查询" [ref=e88]:
+              - generic [ref=e89] [cursor=pointer]:
+                - generic [ref=e90]: 
+                - generic [ref=e92]:
+                  - generic [ref=e93]: 
+                  - text: 预订排菜批量数据查询
+            - treeitem "  押金明细查询" [ref=e94]:
+              - generic [ref=e95] [cursor=pointer]:
+                - generic [ref=e96]: 
+                - generic [ref=e98]:
+                  - generic [ref=e99]: 
+                  - text: 押金明细查询
+            - treeitem "  记账明细数据" [ref=e100]:
+              - generic [ref=e101] [cursor=pointer]:
+                - generic [ref=e102]: 
+                - generic [ref=e104]:
+                  - generic [ref=e105]: 
+                  - text: 记账明细数据
+            - treeitem "  退单明细" [ref=e106]:
+              - generic [ref=e107] [cursor=pointer]:
+                - generic [ref=e108]: 
+                - generic [ref=e110]:
+                  - generic [ref=e111]: 
+                  - text: 退单明细
+            - treeitem "  菜品估清明细" [ref=e112]:
+              - generic [ref=e113] [cursor=pointer]:
+                - generic [ref=e114]: 
+                - generic [ref=e116]:
+                  - generic [ref=e117]: 
+                  - text: 菜品估清明细
+            - treeitem "  挂账流水" [ref=e118]:
+              - generic [ref=e119] [cursor=pointer]:
+                - generic [ref=e120]: 
+                - generic [ref=e122]:
+                  - generic [ref=e123]: 
+                  - text: 挂账流水
+            - treeitem "  营业情况汇总" [ref=e124]:
+              - generic [ref=e125] [cursor=pointer]:
+                - generic [ref=e126]: 
+                - generic [ref=e128]:
+                  - generic [ref=e129]: 
+                  - text: 营业情况汇总
+            - treeitem "  账单主信息数据" [ref=e130]:
+              - generic [ref=e131] [cursor=pointer]:
+                - generic [ref=e132]: 
+                - generic [ref=e134]:
+                  - generic [ref=e135]: 
+                  - text: 账单主信息数据
+            - treeitem "  查询日结接口" [ref=e136]:
+              - generic [ref=e137] [cursor=pointer]:
+                - generic [ref=e138]: 
+                - generic [ref=e140]:
+                  - generic [ref=e141]: 
+                  - text: 查询日结接口
+            - treeitem "  吾享小程序会员订单查询接口" [ref=e142]:
+              - generic [ref=e143] [cursor=pointer]:
+                - generic [ref=e144]: 
+                - generic [ref=e146]:
+                  - generic [ref=e147]: 
+                  - text: 吾享小程序会员订单查询接口
+            - treeitem "  存酒单" [ref=e148]:
+              - generic [ref=e149] [cursor=pointer]:
+                - generic [ref=e150]: 
+                - generic [ref=e152]:
+                  - generic [ref=e153]: 
+                  - text: 存酒单
+            - treeitem "  预订信息明细" [ref=e154]:
+              - generic [ref=e155] [cursor=pointer]:
+                - generic [ref=e156]: 
+                - generic [ref=e158]:
+                  - generic [ref=e159]: 
+                  - text: 预订信息明细
+            - treeitem "  对账自助查询文档" [ref=e160]:
+              - generic [ref=e161] [cursor=pointer]:
+                - generic [ref=e162]: 
+                - generic [ref=e164]:
+                  - generic [ref=e165]: 
+                  - text: 对账自助查询文档
+            - treeitem "  集团预付明细" [ref=e166]:
+              - generic [ref=e167] [cursor=pointer]:
+                - generic [ref=e168]: 
+                - generic [ref=e170]:
+                  - generic [ref=e171]: 
+                  - text: 集团预付明细
+            - treeitem "  团购券接口" [ref=e172]:
+              - generic [ref=e173] [cursor=pointer]:
+                - generic [ref=e174]: 
+                - generic [ref=e176]:
+                  - generic [ref=e177]: 
+                  - text: 团购券接口
+            - treeitem "  外卖改单数据" [ref=e178]:
+              - generic [ref=e179] [cursor=pointer]:
+                - generic [ref=e180]: 
+                - generic [ref=e182]:
+                  - generic [ref=e183]: 
+                  - text: 外卖改单数据
+            - treeitem "  客位状态" [ref=e184]:
+              - generic [ref=e185] [cursor=pointer]:
+                - generic [ref=e186]: 
+                - generic [ref=e188]:
+                  - generic [ref=e189]: 
+                  - text: 客位状态
+            - treeitem "  付款修正记录" [ref=e190]:
+              - generic [ref=e191] [cursor=pointer]:
+                - generic [ref=e192]: 
+                - generic [ref=e194]:
+                  - generic [ref=e195]: 
+                  - text: 付款修正记录
+            - treeitem "  品项限量" [ref=e196]:
+              - generic [ref=e197] [cursor=pointer]:
+                - generic [ref=e198]: 
+                - generic [ref=e200]:
+                  - generic [ref=e201]: 
+                  - text: 品项限量
+        - treeitem "  商超数据" [ref=e202]:
+          - generic [ref=e203] [cursor=pointer]:
+            - generic [ref=e204]: 
+            - generic [ref=e206]:
+              - generic [ref=e207]: 
+              - text: 商超数据
+    - generic [ref=e209]:
+      - generic [ref=e210]:
+        - text: 预订信息明细
+        - generic [ref=e212] [cursor=pointer]: 
+      - generic [ref=e215]:
+        - paragraph [ref=e216]:
+          - strong [ref=e217]: 简要描述：
+          - text: 查询预订相关信息
+        - paragraph [ref=e218]:
+          - strong [ref=e219]: 请求URL：
+        - blockquote [ref=e220]:
+          - paragraph [ref=e221]:
+            - text: 正式环境
+            - text: 餐饮7
+          - list [ref=e222]:
+            - listitem [ref=e223]:
+              - code [ref=e224]: https://cysms.wuuxiang.com/api/datatransfer/getBookOrderDetailData
+        - paragraph [ref=e225]:
+          - strong [ref=e226]: 请求方式：
+        - list [ref=e227]:
+          - listitem [ref=e228]: POST
+        - paragraph [ref=e229]:
+          - strong [ref=e230]: 请求样例：
+        - list [ref=e231]:
+          - listitem [ref=e232]:
+            - link "https://cysms.wuuxiang.com/api/datatransfer/getBookOrderDetailData?centerId=4241&shopId=41112&orderTimeType=1&begin=2023-06-14" [ref=e233] [cursor=pointer]:
+              - /url: https://cysms.wuuxiang.com/api/datatransfer/getBookOrderDetailData?centerId=4241&shopId=41112&orderTimeType=1&begin=2023-06-14
+            - text: 06:30:00&end=2023-06-16 06:30:00&telephone
+        - paragraph [ref=e234]:
+          - strong [ref=e235]: postman图例：
+        - paragraph [ref=e236]:
+          - strong [ref=e237]: Header参数：
+        - table [ref=e239]:
+          - rowgroup [ref=e240]:
+            - row "参数名 必选 类型 说明" [ref=e241]:
+              - columnheader "参数名" [ref=e242]
+              - columnheader "必选" [ref=e243]
+              - columnheader "类型" [ref=e244]
+              - columnheader "说明" [ref=e245]
+          - rowgroup [ref=e246]:
+            - row "access_token 是 string 授权令牌" [ref=e247]:
+              - cell "access_token" [ref=e248]
+              - cell "是" [ref=e249]
+              - cell "string" [ref=e250]
+              - cell "授权令牌" [ref=e251]
+            - row "accessid 是 string 授权Id" [ref=e252]:
+              - cell "accessid" [ref=e253]
+              - cell "是" [ref=e254]
+              - cell "string" [ref=e255]
+              - cell "授权Id" [ref=e256]
+            - row "granttype 是 string 授权类型 当前填：client" [ref=e257]:
+              - cell "granttype" [ref=e258]
+              - cell "是" [ref=e259]
+              - cell "string" [ref=e260]
+              - cell "授权类型 当前填：client" [ref=e261]
+        - paragraph [ref=e262]:
+          - strong [ref=e263]: 查询参数：
+        - table [ref=e265]:
+          - rowgroup [ref=e266]:
+            - row "参数名 必选 类型 说明" [ref=e267]:
+              - columnheader "参数名" [ref=e268]
+              - columnheader "必选" [ref=e269]
+              - columnheader "类型" [ref=e270]
+              - columnheader "说明" [ref=e271]
+          - rowgroup [ref=e272]:
+            - row "centerId 是 string 餐饮集团ID" [ref=e273]:
+              - cell "centerId" [ref=e274]
+              - cell "是" [ref=e275]
+              - cell "string" [ref=e276]
+              - cell "餐饮集团ID" [ref=e277]
+            - row "shopId 是 string 门店ID" [ref=e278]:
+              - cell "shopId" [ref=e279]
+              - cell "是" [ref=e280]
+              - cell "string" [ref=e281]
+              - cell "门店ID" [ref=e282]
+            - row "begin 是 string 起始时间 2020-09-09 00:00:00" [ref=e283]:
+              - cell "begin" [ref=e284]
+              - cell "是" [ref=e285]
+              - cell "string" [ref=e286]
+              - cell "起始时间 2020-09-09 00:00:00" [ref=e287]
+            - row "end 是 string 结束时间 2020-09-12 00:00:00" [ref=e288]:
+              - cell "end" [ref=e289]
+              - cell "是" [ref=e290]
+              - cell "string" [ref=e291]
+              - cell "结束时间 2020-09-12 00:00:00" [ref=e292]
+            - row "telephone 否 string 手机号" [ref=e293]:
+              - cell "telephone" [ref=e294]
+              - cell "否" [ref=e295]
+              - cell "string" [ref=e296]
+              - cell "手机号" [ref=e297]
+        - paragraph [ref=e298]:
+          - strong [ref=e299]: 返回参数说明
+        - table [ref=e301]:
+          - rowgroup [ref=e302]:
+            - row "参数名 说明 备注" [ref=e303]:
+              - columnheader "参数名" [ref=e304]
+              - columnheader "说明" [ref=e305]
+              - columnheader "备注" [ref=e306]
+          - rowgroup [ref=e307]:
+            - row "code 处理结果标识 0：成功；-1或其它：失败" [ref=e308]:
+              - cell "code" [ref=e309]
+              - cell "处理结果标识" [ref=e310]
+              - cell "0：成功；-1或其它：失败" [ref=e311]
+            - row "data 返回数据 json格式" [ref=e312]:
+              - cell "data" [ref=e313]
+              - cell "返回数据" [ref=e314]
+              - cell "json格式" [ref=e315]
+            - row "msg 返回信息 成功则为：success，失败会提示相应信息" [ref=e316]:
+              - cell "msg" [ref=e317]
+              - cell "返回信息" [ref=e318]
+              - cell "成功则为：success，失败会提示相应信息" [ref=e319]
+        - paragraph [ref=e320]:
+          - emphasis [ref=e321]: data
+          - text: 信息
+        - table [ref=e323]:
+          - rowgroup [ref=e324]:
+            - row "参数名 说明 备注" [ref=e325]:
+              - columnheader "参数名" [ref=e326]
+              - columnheader "说明" [ref=e327]
+              - columnheader "备注" [ref=e328]
+          - rowgroup [ref=e329]:
+            - row "bsCode 营业流水编号" [ref=e330]:
+              - cell "bsCode" [ref=e331]
+              - cell "营业流水编号" [ref=e332]
+              - cell [ref=e333]
+              - cell [ref=e334]
+            - row "orderNo 订单编号" [ref=e335]:
+              - cell "orderNo" [ref=e336]
+              - cell "订单编号" [ref=e337]
+              - cell [ref=e338]
+              - cell [ref=e339]
+            - row "bookSource 订单来源" [ref=e340]:
+              - cell "bookSource" [ref=e341]
+              - cell "订单来源" [ref=e342]
+              - cell [ref=e343]
+              - cell [ref=e344]
+            - row "bookType 预订类型" [ref=e345]:
+              - cell "bookType" [ref=e346]
+              - cell "预订类型" [ref=e347]
+              - cell [ref=e348]
+              - cell [ref=e349]
+            - row "bookMan 预订人" [ref=e350]:
+              - cell "bookMan" [ref=e351]
+              - cell "预订人" [ref=e352]
+              - cell [ref=e353]
+              - cell [ref=e354]
+            - row "tel 联系电话" [ref=e355]:
+              - cell "tel" [ref=e356]
+              - cell "联系电话" [ref=e357]
+              - cell [ref=e358]
+              - cell [ref=e359]
+            - row "bookTime 预定日期" [ref=e360]:
+              - cell "bookTime" [ref=e361]
+              - cell "预定日期" [ref=e362]
+              - cell [ref=e363]
+              - cell [ref=e364]
+            - row "shift 市别" [ref=e365]:
+              - cell "shift" [ref=e366]
+              - cell "市别" [ref=e367]
+              - cell [ref=e368]
+              - cell [ref=e369]
+            - row "arrivedTime 到店时间" [ref=e370]:
+              - cell "arrivedTime" [ref=e371]
+              - cell "到店时间" [ref=e372]
+              - cell [ref=e373]
+              - cell [ref=e374]
+            - row "people 就餐人数" [ref=e375]:
+              - cell "people" [ref=e376]
+              - cell "就餐人数" [ref=e377]
+              - cell [ref=e378]
+              - cell [ref=e379]
+            - row "bookPoint 已选客位" [ref=e380]:
+              - cell "bookPoint" [ref=e381]
+              - cell "已选客位" [ref=e382]
+              - cell [ref=e383]
+              - cell [ref=e384]
+            - row "bookState 状态" [ref=e385]:
+              - cell "bookState" [ref=e386]
+              - cell "状态" [ref=e387]
+              - cell [ref=e388]
+              - cell [ref=e389]
+            - row "salesMan 营销员" [ref=e390]:
+              - cell "salesMan" [ref=e391]
+              - cell "营销员" [ref=e392]
+              - cell [ref=e393]
+              - cell [ref=e394]
+            - row "operatorName 操作员" [ref=e395]:
+              - cell "operatorName" [ref=e396]
+              - cell "操作员" [ref=e397]
+              - cell [ref=e398]
+              - cell [ref=e399]
+            - row "bookMoney 订金" [ref=e400]:
+              - cell "bookMoney" [ref=e401]
+              - cell "订金" [ref=e402]
+              - cell [ref=e403]
+              - cell [ref=e404]
+            - row "remark 备注" [ref=e405]:
+              - cell "remark" [ref=e406]
+              - cell "备注" [ref=e407]
+              - cell [ref=e408]
+              - cell [ref=e409]
+            - row "modifyTime 最后修改时间" [ref=e410]:
+              - cell "modifyTime" [ref=e411]
+              - cell "最后修改时间" [ref=e412]
+              - cell [ref=e413]
+              - cell [ref=e414]
+            - row "modifierName 最后修改操作员" [ref=e415]:
+              - cell "modifierName" [ref=e416]
+              - cell "最后修改操作员" [ref=e417]
+              - cell [ref=e418]
+              - cell [ref=e419]
+            - row "cancelTime 取消时间" [ref=e420]:
+              - cell "cancelTime" [ref=e421]
+              - cell "取消时间" [ref=e422]
+              - cell [ref=e423]
+              - cell [ref=e424]
+            - row "cancelReason 取消原因" [ref=e425]:
+              - cell "cancelReason" [ref=e426]
+              - cell "取消原因" [ref=e427]
+              - cell [ref=e428]
+              - cell [ref=e429]
+            - row "cancelMan 取消操作员" [ref=e430]:
+              - cell "cancelMan" [ref=e431]
+              - cell "取消操作员" [ref=e432]
+              - cell [ref=e433]
+              - cell [ref=e434]
+            - row "bookPointBsid 营业流水Id" [ref=e435]:
+              - cell "bookPointBsid" [ref=e436]
+              - cell "营业流水Id" [ref=e437]
+              - cell [ref=e438]
+              - cell [ref=e439]
+            - row "lastMoney 实收" [ref=e440]:
+              - cell "lastMoney" [ref=e441]
+              - cell "实收" [ref=e442]
+              - cell [ref=e443]
+              - cell [ref=e444]
+            - row "incomeMoney 纯收" [ref=e445]:
+              - cell "incomeMoney" [ref=e446]
+              - cell "纯收" [ref=e447]
+              - cell [ref=e448]
+              - cell [ref=e449]
+            - row "bookPointTsid 结算流水Id" [ref=e450]:
+              - cell "bookPointTsid" [ref=e451]
+              - cell "结算流水Id" [ref=e452]
+              - cell [ref=e453]
+              - cell [ref=e454]
+            - row "shopId 创建店" [ref=e455]:
+              - cell "shopId" [ref=e456]
+              - cell "创建店" [ref=e457]
+              - cell [ref=e458]
+              - cell [ref=e459]
+            - row "createTime 创建时间" [ref=e460]:
+              - cell "createTime" [ref=e461]
+              - cell "创建时间" [ref=e462]
+              - cell [ref=e463]
+              - cell [ref=e464]
+            - row "payWayName 支付方式" [ref=e465]:
+              - cell "payWayName" [ref=e466]
+              - cell "支付方式" [ref=e467]
+              - cell [ref=e468]
+              - cell [ref=e469]
+            - row "salesManCode 营销员code" [ref=e470]:
+              - cell "salesManCode" [ref=e471]
+              - cell "营销员code" [ref=e472]
+              - cell [ref=e473]
+              - cell [ref=e474]
+            - row "salesManCellPhone 营销员手机号" [ref=e475]:
+              - cell "salesManCellPhone" [ref=e476]
+              - cell "营销员手机号" [ref=e477]
+              - cell [ref=e478]
+        - paragraph [ref=e479]:
+          - strong [ref=e480]: 返回示例
+          - text: "{"
+          - text: "“code”: “0”,"
+          - text: "“msg”: “成功”,"
+          - text: "“data”: {"
+          - text: "“data”: ["
+          - text: "{"
+          - text: "“orderNo”: “66f26cb6-a3c5-4157-b038-a29a4707f27f”,"
+          - text: "“shift”: “午市”,"
+          - text: "“bookMoney”: 0.0000,"
+          - text: "“arrivedTime”: 1686801600000,"
+          - text: "“bookTime”: “2023-06-15”,"
+          - text: "“remark”: “[普通用餐]”,"
+          - text: "“lastMoney”: 0,"
+          - text: "“bookMan”: “荣女士”,"
+          - text: "“people”: 4,"
+          - text: "“bookState”: “已取消”,"
+          - text: "“incomeMoney”: 0,"
+          - text: "“bsCode”: “-“,"
+          - text: "“modifyTime”: 1686793117512,"
+          - text: "“cancelTime”: 1686793117498,"
+          - text: "“createTime”: 1686792717600,"
+          - text: "“tel”: “18222964812”,"
+          - text: "“shopId”: 41112,"
+          - text: "“cancelReason”: “食尚订撤单”,"
+          - text: "“bookSource”: “食尚订”,"
+          - text: "“bookType”: “普通就餐”"
+          - text: "}"
+          - text: "]"
+          - text: "},"
+          - text: "“success”: true"
+          - text: "}"
+          - text: "```"
+        - paragraph [ref=e481]:
+          - strong [ref=e482]: 备注
