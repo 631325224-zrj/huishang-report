@@ -801,19 +801,24 @@ async function queryWalkInBaojian(shopId, beginDate, endDate) {
         const json = await res.json();
         const list = json?.data?.billList || [];
         list.forEach(b => {
+          // 只打印第一条包间记录的完整键名（调试用）
+          const pointType = b.point_type_name || '';
+          if (pointType.includes('包间') && !window._loggedKeys) {
+            window._loggedKeys = true;
+            console.log('[getserialdata 包间记录键名]', Object.keys(b).join(', '));
+          }
           // order_type=2 是预订单，跳过（预订已单独统计）
           if (String(b.order_type) === '2') return;
           // 只统计包间类型
-          const pointType = b.point_type_name || '';
           if (!pointType.includes('包间')) return;
-          // 调试日志：打印所有可能的午/晚市字段
-          if (b.shift || b.open_shift_id || b.shift_name) {
-            console.log(`[walkin包间] 流水=${b.billCode||b.serialNo||b.bill_no} shift=${b.shift} open_shift_id=${b.open_shift_id} shift_name=${b.shift_name}`);
-          }
+          // 调试日志：打印所有非预订包间记录的关键字段
+          const oid = b.billCode || b.serialNo || b.bill_no || b.bill_id || '?';
+          const shiftFields = { shift: b.shift, open_shift_id: b.open_shift_id, shift_name: b.shift_name, sale_shift: b.sale_shift, meal_type: b.meal_type, dinner_type: b.dinner_type };
+          console.log(`[walkin包间] 流水=${oid} order_type=${b.order_type} point_type=${pointType}`, shiftFields);
           // 提取午/晚市标识：兼容多种字段名
-          const shiftRaw = b.shift || b.open_shift_id || b.shift_name || '';
-          if (shiftRaw.includes('午')) noon++;
-          else if (shiftRaw.includes('晚')) evening++;
+          const shiftRaw = b.shift || b.open_shift_id || b.shift_name || b.sale_shift || b.meal_type || b.dinner_type || '';
+          if (String(shiftRaw).includes('午')) noon++;
+          else if (String(shiftRaw).includes('晚')) evening++;
         });
         const totalPages = json?.data?.pageInfo?.pageTotal || 1;
         if (pageNo >= totalPages) { hasMore = false; }
