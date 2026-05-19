@@ -599,10 +599,12 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   let apiStatus = 'unknown';
   let rawResponse = null;
   try {
-    // 统一使用 dateType=2（营业日月口径）：settleDate=YYYY-MM-01 返回整月汇总
-    // 记忆确认：dateType=2 对历史年（2025）和当年（2026）均有效
-    const settleDate = `${monthStr}-01`;
-    const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${settleDate}&dateType=2`;
+    // 使用 beginDate/endDate + dateType=1 查询整月汇总
+    // 关键：endDate 必须带时间格式 HH:MM:SS，否则解析失败返回错误
+    const beginDate = `${monthStr}-01 00:00:00`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')} 23:59:59`;
+    const qs = `centerId=${centerId}&shopId=${shopId}&beginDate=${encodeURIComponent(beginDate)}&endDate=${encodeURIComponent(endDate)}&dateType=1`;
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), 15000);
     const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
@@ -909,9 +911,10 @@ function lsLoadYearlyData() {
 }
 
 // ══════════════════════════════════════════════════════════
-// 清理旧缓存（v10→v11：历史年改回 getBusinessSituation dateType=2，探测证实2025年有效；清除v10逐天累加错误数据及预加载双写Bug数据）
+// 清理旧缓存
+// v23: 修正月度查询为 beginDate/endDate + dateType=1（之前 dateType=2/3 对历史年和当年均返回单日数据，非整月汇总）
 // ══════════════════════════════════════════════════════════
-const LS_CACHE_VERSION = 'v22';  // v22: 统一月度查询为 dateType=2（统一营业日月口径）
+const LS_CACHE_VERSION = 'v23';  // v23: 使用区间查询获取整月汇总
 
 function lsClearOldCache() {
   // 检查是否需要清理旧缓存
@@ -1080,67 +1083,63 @@ async function loadAllData() {
   console.log('[门店月数据] 大蜀山:', shopMonthlyData[247421]);
 
   // ══════════════════════════════════════════════════════════
-  // 第三阶段：静默预加载近 6 个月（保证常见环比对比秒开；年报数据由 ensureYearData 按需加载）
+  // 第三阶段：加载所有上线后的历史月份（同步等待，确保全部加载完再呈现）
   // ══════════════════════════════════════════════════════════
   const preloadTargets = [];
-  for (let i = 1; i <= 6; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const py = d.getFullYear(), pm = d.getMonth() + 1;
-    const pk = `${py}-${p(pm)}`;
-    const isOnline = py > API_CONFIG.onlineYear || (py === API_CONFIG.onlineYear && pm >= API_CONFIG.onlineMonth);
-    if (isOnline && !loadedMonths.has(pk)) preloadTargets.push([py, pm, pk]);
-  }
-  console.log(`[预加载] 目标月份: ${preloadTargets.map(t => t[2]).join(', ')}`);
-
-  // 批量并发预加载（受控并发，不全部并行，防止请求量爆炸）
-  const preloadPromises = preloadTargets.map(async ([py, pm, pk]) => {
-    try {
-      // 二次防重：如果在 batchQuery 并发期间其他协程已将此月加载完毕，则跳过
-      if (loadedMonths.has(pk)) {
-        console.log(`[预加载 ${pk}] 已在缓存中，跳过`);
-        return;
-      }
-      const tasks = shopIds.map(sid => () => queryMonthBillList(py, pm, API_CONFIG.centerId, sid));
-      const results = await batchQuery(tasks, 8);
-      // 再次检查：batchQuery 执行期间可能被 ensureMonthData 抢先加载
-      if (loadedMonths.has(pk)) {
-        console.log(`[预加载 ${pk}] 并发完成后已存在，放弃写入`);
-        return;
-      }
-      const prevYKey = String(py);
-      const shopTmp = {};
-      results.forEach(result => {
-        if (result?.shops) {
-          Object.entries(result.shops).forEach(([sid, shopData]) => {
-            const n = Number(sid);
-            if (shopData.income > 0) {
-              monthlyData[pk] = (monthlyData[pk] || 0) + shopData.income;
-              yearlyData[prevYKey] = (yearlyData[prevYKey] || 0) + shopData.income;
-              if (!shopMonthlyData[n]) shopMonthlyData[n] = {};
-              if (!shopYearlyData[n]) shopYearlyData[n] = {};
-              shopMonthlyData[n][pk] = (shopMonthlyData[n][pk] || 0) + shopData.income;
-              shopYearlyData[n][prevYKey] = (shopYearlyData[n][prevYKey] || 0) + shopData.income;
-              shopTmp[n] = (shopTmp[n] || 0) + shopData.income;
-            }
-          });
-        }
-      });
-      if (Object.keys(shopTmp).length > 0) {
-        lsSaveMonth(pk, monthlyData[pk], shopTmp);
-        loadedMonths.add(pk);
-        lsSaveMeta();
-      }
-      console.log(`[预加载 ${pk}] 完成: ${Object.keys(shopTmp).length} 门店, 总纯收=${monthlyData[pk]?.toFixed(2)}`);
-    } catch (e) {
-      console.warn(`[预加载失败] ${pk}`, e.message);
+  months.forEach(m => {
+    if (m.key !== curMonthKey && !loadedMonths.has(m.key)) {
+      const [py, pm] = m.key.split('-').map(Number);
+      preloadTargets.push([py, pm, m.key]);
     }
   });
+  console.log(`[预加载] 目标月份: ${preloadTargets.map(t => t[2]).join(', ')} (${preloadTargets.length}个月)`);
 
-  // 后台静默等待预加载完成（不阻塞 UI，页面 loadAllData 返回后可立即渲染）
-  Promise.all(preloadPromises).then(() => {
-    lsSaveMeta();
-    console.log('[预加载] 全部完成');
-  });
+  // 批量并发预加载（同步等待全部完成）
+  const BATCH_SIZE = 3; // 每月28次请求，3个月并发 = 84次请求，控制并发量
+  for (let i = 0; i < preloadTargets.length; i += BATCH_SIZE) {
+    const batch = preloadTargets.slice(i, i + BATCH_SIZE);
+    const batchPromises = batch.map(async ([py, pm, pk]) => {
+      try {
+        if (loadedMonths.has(pk)) return;
+        const tasks = shopIds.map(sid => () => queryMonthBillList(py, pm, API_CONFIG.centerId, sid));
+        const results = await batchQuery(tasks, 10);
+        if (loadedMonths.has(pk)) return;
+        const prevYKey = String(py);
+        const shopTmp = {};
+        results.forEach(result => {
+          if (result?.shops) {
+            Object.entries(result.shops).forEach(([sid, shopData]) => {
+              const n = Number(sid);
+              if (shopData.income > 0) {
+                monthlyData[pk] = (monthlyData[pk] || 0) + shopData.income;
+                yearlyData[prevYKey] = (yearlyData[prevYKey] || 0) + shopData.income;
+                if (!shopMonthlyData[n]) shopMonthlyData[n] = {};
+                if (!shopYearlyData[n]) shopYearlyData[n] = {};
+                shopMonthlyData[n][pk] = (shopMonthlyData[n][pk] || 0) + shopData.income;
+                shopYearlyData[n][prevYKey] = (shopYearlyData[n][prevYKey] || 0) + shopData.income;
+                shopTmp[n] = (shopTmp[n] || 0) + shopData.income;
+              }
+            });
+          }
+        });
+        if (Object.keys(shopTmp).length > 0) {
+          lsSaveMonth(pk, monthlyData[pk], shopTmp);
+          loadedMonths.add(pk);
+        }
+        console.log(`[预加载 ${pk}] 完成: ${Object.keys(shopTmp).length} 门店, 总纯收=${monthlyData[pk]?.toFixed(2)}`);
+      } catch (e) {
+        console.warn(`[预加载失败] ${pk}`, e.message);
+      }
+    });
+    const progressStart = 70;
+    const progressEnd = 98;
+    const pct = Math.round(progressStart + (i / preloadTargets.length) * (progressEnd - progressStart));
+    updateProgress(pct, `加载历史数据 ${i + 1}/${preloadTargets.length} 个月…`);
+    await Promise.all(batchPromises);
+  }
+
+  lsSaveMeta();
+  console.log('[预加载] 全部完成');
 
   updateProgress(100, '完成');
   // 同步 dailyData 到 DATA（monthlyData/yearlyData 等已经是 DATA 的引用）
