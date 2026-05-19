@@ -595,7 +595,6 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   const shopInfo = ALL_SHOPS.find(s => String(s.centerId) === sid);
   const shopNameResolved = shopInfo?.name || `门店${sid}`;
 
-  // 历史月份用 beginDate/endDate 区间查询（dateType=3 对历史月只返回单日数据）
   const curYear = new Date().getFullYear();
   const isHistorical = year < curYear;
 
@@ -605,13 +604,11 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   try {
     let qs;
     if (isHistorical) {
-      // 2025年及历史：用 beginDate/endDate 查整月
       const beginDate = `${monthStr}-01`;
       const lastDay = new Date(year, month, 0).getDate();
       const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
       qs = `centerId=${centerId}&shopId=${shopId}&beginDate=${beginDate}&endDate=${endDate}&dateType=1`;
     } else {
-      // 2026年当年：用 settleDate+dateType=3（月维度）
       qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=3`;
     }
     const controller = new AbortController();
@@ -631,10 +628,6 @@ async function queryMonthBillList(year, month, centerId, shopId) {
       income = parseFloat(incomeObj.incomeTotal) || 0;
     } else if (bd.last !== undefined) {
       income = parseFloat(bd.last) || 0;
-    }
-    // 诊断：打印历史月份查询参数和返回值
-    if (isHistorical) {
-      console.log(`[历史月API ${monthStr}] qs=${qs} → incomeTotal=${incomeObj?.incomeTotal} | bd.last=${bd.last}`);
     }
     if (income === 0 && res.status === 200) {
       console.warn(`[月度汇总 警告] ${monthStr} ${shopNameResolved}: income=0, API状态=${res.status}`);
@@ -926,7 +919,7 @@ function lsLoadYearlyData() {
 // ══════════════════════════════════════════════════════════
 // 清理旧缓存（v10→v11：历史年改回 getBusinessSituation dateType=2，探测证实2025年有效；清除v10逐天累加错误数据及预加载双写Bug数据）
 // ══════════════════════════════════════════════════════════
-const LS_CACHE_VERSION = 'v20';  // v20: 基于dd052f3稳定版，强制清除历史脏缓存
+const LS_CACHE_VERSION = 'v21';  // v21: 统一月度查询为 dateType=2，修复历史年数据为0的问题
 
 function lsClearOldCache() {
   // 检查是否需要清理旧缓存
@@ -1088,21 +1081,16 @@ async function loadAllData() {
       if (shopDailyData[r.shopId]) shopDailyData[r.shopId][r.settleDate] = r.income;
     }
   });
-  // 立即同步到全局 DATA，render() 可读取日数据（渐进式更新 UI）
+  // 同步日数据到全局 DATA（不渲染，等全部加载完再统一呈现）
   DATA.dailyData = dailyData;
   DATA.shopDailyData = shopDailyData;
-  render();
 
   // ══════════════════════════════════════════════════════════
-  // 第二阶段：加载当前月账单明细数据（28 次 API，分页获取）
-  // 使用账单明细 API（getserialdata）获取整月数据
+  // 第二阶段：加载当前月账单明细数据（28 次 API）
   // ══════════════════════════════════════════════════════════
   updateProgress(68, `加载当月账单明细…`);
   const monthTasks = shopIds.map(shopId => () => queryMonthBillList(curYear, curMonth, API_CONFIG.centerId, shopId));
   const monthResults = await batchQuery(monthTasks, 5, prog => updateProgress(68 + prog * 0.3, `当月账单 ${prog}%…`));
-
-  // monthlyData/yearlyData/shopMonthlyData/shopYearlyData 已经是 DATA 的引用，无需再赋值
-  render();
   
   // 清零并重新填入当前月（避免日维度累加误差）
   const oldCurMonth = monthlyData[curMonthKey] || 0;
@@ -1205,18 +1193,15 @@ async function loadAllData() {
       lsSaveMonth(pk, monthlyData[pk] || 0, shopTmp);
       loadedMonths.add(pk);
       lsSaveMeta();
-      // ✅ 预加载月份写入全局 DATA 后立即触发增量渲染，年报数据渐进式呈现
-      render();
     } catch (e) {
       console.warn(`[预加载失败] ${pk}`, e.message);
     }
   });
 
-  // 后台静默等待预加载完成（不阻塞UI，页面初始化后可立即交互）
-  Promise.all(preloadPromises).then(() => {
-    lsSaveMeta();
-    console.log('[预加载] 全部完成');
-  });
+  // 等待所有预加载完成（全局加载完毕后统一呈现，不分步渲染）
+  await Promise.all(preloadPromises);
+  lsSaveMeta();
+  console.log('[预加载] 全部完成');
 
   updateProgress(100, '完成');
   // 同步 dailyData 到 DATA（monthlyData/yearlyData 等已经是 DATA 的引用）
@@ -1565,7 +1550,12 @@ function bindEvents() {
       document.getElementById('summary-strip-wrap').style.display  = isOccupy ? 'none' : '';
       document.getElementById('charts-section-wrap').style.display = isOccupy ? 'none' : '';
       document.getElementById('revenue-table-wrap').style.display  = isOccupy ? 'none' : '';
-      if (!isOccupy) { updateBSelector(); render(); }
+      if (isOccupy) {
+        // 切换到出租率Tab时自动触发查询（若数据未加载）
+        if (!OCC_DATA) renderOccupancy();
+      } else {
+        updateBSelector(); render();
+      }
     });
   });
 
@@ -2919,19 +2909,81 @@ window.addEventListener('DOMContentLoaded', async () => {
   };
 
   DATA = initDATA();
-  document.getElementById('loading-mask').style.display = 'none';
   initSelectors();
-  render(); // 立即渲染，用户能看到页面框架
 
-  // 后台加载完整数据（不阻塞 UI，loadAllData 内部各阶段完成后会逐步 render）
-  loadAllData().catch(err => {
-    console.error('后台数据加载异常:', err);
-    const notice = document.getElementById('notice-bar');
-    if (notice) {
-      notice.textContent = '⚠️ 部分数据加载失败，请检查网络后刷新重试';
-      notice.classList.add('visible');
-    }
-  });
+  // 检查是否有缓存数据
+  const hasCache = (() => {
+    try {
+      const meta = localStorage.getItem(LS_META);
+      if (!meta) return false;
+      const parsed = JSON.parse(meta);
+      return (parsed?.loadedMonths?.length || 0) > 0;
+    } catch { return false; }
+  })();
+
+  if (hasCache) {
+    // 有缓存：先渲染缓存数据，再后台刷新
+    lsRestoreMonths();
+    const monthlyData = DATA.monthlyData;
+    const yearlyData = DATA.yearlyData;
+    const shopMonthlyData = DATA.shopMonthlyData;
+    const shopYearlyData = DATA.shopYearlyData;
+    let cacheHit = 0;
+    loadedMonths.forEach(mKey => {
+      const cached = lsLoadMonth(mKey);
+      if (cached) {
+        monthlyData[mKey] = cached.total || 0;
+        Object.entries(cached.shops || {}).forEach(([cid, amt]) => {
+          const n = Number(cid);
+          if (!shopMonthlyData[n]) shopMonthlyData[n] = {};
+          shopMonthlyData[n][mKey] = amt;
+        });
+        cacheHit++;
+      }
+    });
+    // 从缓存月份累加年度数据
+    Object.entries(monthlyData).forEach(([mKey, total]) => {
+      const yKey = mKey.slice(0, 4);
+      yearlyData[yKey] = (yearlyData[yKey] || 0) + total;
+      Object.entries(shopMonthlyData).forEach(([cid, months]) => {
+        if (months[mKey]) {
+          if (!shopYearlyData[cid]) shopYearlyData[cid] = {};
+          shopYearlyData[cid][yKey] = (shopYearlyData[cid][yKey] || 0) + months[mKey];
+        }
+      });
+    });
+    DATA.summary = {
+      today: 0,
+      currentMonth: monthlyData[`${new Date().getFullYear()}-${p(new Date().getMonth()+1)}`] || 0,
+      currentYear: yearlyData[String(new Date().getFullYear())] || 0,
+    };
+    document.getElementById('loading-mask').style.display = 'none';
+    render();
+    console.log(`[缓存秒进] ${cacheHit} 个月份已恢复，立即渲染`);
+
+    // 后台静默刷新最新数据
+    loadAllData().then(() => {
+      render();
+      console.log('[后台刷新] 数据已更新');
+    }).catch(err => {
+      console.error('[后台刷新失败]', err);
+    });
+  } else {
+    // 无缓存：等全局加载完再呈现
+    loadAllData().then(() => {
+      document.getElementById('loading-mask').style.display = 'none';
+      render();
+    }).catch(err => {
+      console.error('数据加载异常:', err);
+      document.getElementById('loading-mask').style.display = 'none';
+      const notice = document.getElementById('notice-bar');
+      if (notice) {
+        notice.textContent = '⚠️ 部分数据加载失败，请检查网络后刷新重试';
+        notice.classList.add('visible');
+      }
+      render();
+    });
+  }
 });
 </script>
 </body>
