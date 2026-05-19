@@ -584,7 +584,7 @@ async function fetchWithTimeout(url, timeoutMs = 10000) {
   return res;
 }
 
-async function queryMonthBillList(year, month, centerId, shopId) {
+async function queryMonthBillList(year, month, centerId, shopId, retry = 0) {
   const cacheKey = `bill_${centerId}_${shopId}_${year}_${month}`;
   if (SHOP_DATA_CACHE[cacheKey] !== undefined) {
     return SHOP_DATA_CACHE[cacheKey];
@@ -600,7 +600,6 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   let rawResponse = null;
   try {
     // 使用 beginDate/endDate + dateType=1 查询整月汇总
-    // 关键：endDate 必须带时间格式 HH:MM:SS，否则解析失败返回错误
     const beginDate = `${monthStr}-01 00:00:00`;
     const lastDay = new Date(year, month, 0).getDate();
     const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')} 23:59:59`;
@@ -620,11 +619,16 @@ async function queryMonthBillList(year, month, centerId, shopId) {
     const apiCode = json?.code;
     if (apiCode !== '0' && apiCode !== 0) {
       apiStatus = `api_error:${apiCode}`;
+      // token 失效时自动刷新并重试（最多1次）
+      const tokenErrors = ['-400003', '-400002', '-400001', '401', '403'];
+      if (retry === 0 && (tokenErrors.includes(String(apiCode)) || json?.msg?.includes('token') || json?.msg?.includes('Token'))) {
+        console.warn(`[月度汇总 Token失效] ${monthStr} ${shopNameResolved}: code=${apiCode}, 刷新token后重试…`);
+        token = await getToken();
+        if (token) return queryMonthBillList(year, month, centerId, shopId, 1);
+      }
       console.error(`[月度汇总 API错误] ${monthStr} ${shopNameResolved}: code=${apiCode}, msg=${json?.msg || 'unknown'}`);
       const shops = { [sid]: { name: shopNameResolved, income: 0 } };
       const result = { totalIncome: 0, shops, monthStr, apiStatus, rawResponse, success: false };
-      // 不写入 SHOP_DATA_CACHE，允许重试
-      console.log(`[月度汇总] ${monthStr} ${shopNameResolved}: API错误, 状态=${apiStatus}`);
       return result;
     }
     const incomeObj = json?.data?.List?.income;
@@ -639,7 +643,6 @@ async function queryMonthBillList(year, month, centerId, shopId) {
     }
   } catch (e) {
     apiStatus = `error: ${e.message}`;
-    console.warn(`[月度汇总 失败] ${monthStr} 门店${shopId}:`, e.message);
     // 网络错误/超时，不写入缓存，允许下次重试
     return { totalIncome: 0, shops: { [sid]: { name: shopNameResolved, income: 0 } }, monthStr, apiStatus, rawResponse: null, success: false };
   }
@@ -1033,7 +1036,7 @@ async function loadAllData() {
       dayTasks.push(() => queryRevenue(d, 'day', API_CONFIG.centerId, shopId));
     });
   });
-  const dayResults = await batchQuery(dayTasks, 20, prog => updateProgress(15 + prog * 0.5, `日数据 ${prog}%…`));
+  const dayResults = await batchQuery(dayTasks, 5, prog => updateProgress(15 + prog * 0.5, `日数据 ${prog}%…`));
   const validDay = dayResults.filter(r => r?.income !== undefined);
   console.log(`[日数据] 有效:${validDay.length}/${dayResults.length}`);
 
@@ -1121,8 +1124,8 @@ async function loadAllData() {
     for (let m = 1; m <= curMonth; m++) {
       histMonths.push(`${curYear}-${p(m)}`);
     }
-    // 去重（当前月已在Phase2加载，不要重复）
-    const toLoad = histMonths.filter(k => k !== curMonthKey && !loadedMonths.has(k));
+    // 加载所有未标记的月份（包括当前月，防止Phase2失败遗漏）
+    const toLoad = histMonths.filter(k => !loadedMonths.has(k));
     const totalToLoad = toLoad.length;
     if (totalToLoad === 0) {
       console.log('[第三阶段] 所有历史月份已在缓存中，跳过预加载');
@@ -1131,8 +1134,8 @@ async function loadAllData() {
     }
     console.log(`[第三阶段] 预加载 ${totalToLoad} 个月份（本年+去年）:`, toLoad);
 
-    // 分小批量加载，每批6个月（6月×28店=168次并发请求，分2批约30-60秒）
-    const BATCH = 6;
+    // 分小批量加载，每批3个月（3月×3并发=9总并发，避免服务器限流）
+    const BATCH = 3;
     let loaded = 0;
     for (let i = 0; i < toLoad.length; i += BATCH) {
       const batch = toLoad.slice(i, i + BATCH);
@@ -1305,7 +1308,7 @@ async function ensureMonthData(year, month) {
       if (loadingEl) loadingEl.textContent = `↻ 加载 ${monthName}… (${doneCount}/${tasks.length})`;
       return r;
     }));
-    const results = await batchQuery(wrappedTasks, 10);
+    const results = await batchQuery(wrappedTasks, 3); // 降低并发避免服务器限流
 
     const shopMonthTmp = {};
     let successCount = 0;
