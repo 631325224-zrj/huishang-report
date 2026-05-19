@@ -595,22 +595,14 @@ async function queryMonthBillList(year, month, centerId, shopId) {
   const shopInfo = ALL_SHOPS.find(s => String(s.centerId) === sid);
   const shopNameResolved = shopInfo?.name || `门店${sid}`;
 
-  const curYear = new Date().getFullYear();
-  const isHistorical = year < curYear;
-
   let income = 0;
   let apiStatus = 'unknown';
   let rawResponse = null;
   try {
-    let qs;
-    if (isHistorical) {
-      const beginDate = `${monthStr}-01`;
-      const lastDay = new Date(year, month, 0).getDate();
-      const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
-      qs = `centerId=${centerId}&shopId=${shopId}&beginDate=${beginDate}&endDate=${endDate}&dateType=1`;
-    } else {
-      qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${monthStr}-01&dateType=3`;
-    }
+    // 统一使用 dateType=2（营业日月口径）：settleDate=YYYY-MM-01 返回整月汇总
+    // 记忆确认：dateType=2 对历史年（2025）和当年（2026）均有效
+    const settleDate = `${monthStr}-01`;
+    const qs = `centerId=${centerId}&shopId=${shopId}&settleDate=${settleDate}&dateType=2`;
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), 15000);
     const res = await fetch(`${API_CONFIG.baseUrl}/datatransfer/getBusinessSituation?${qs}`, {
@@ -919,7 +911,7 @@ function lsLoadYearlyData() {
 // ══════════════════════════════════════════════════════════
 // 清理旧缓存（v10→v11：历史年改回 getBusinessSituation dateType=2，探测证实2025年有效；清除v10逐天累加错误数据及预加载双写Bug数据）
 // ══════════════════════════════════════════════════════════
-const LS_CACHE_VERSION = 'v21';  // v21: 统一月度查询为 dateType=2，修复历史年数据为0的问题
+const LS_CACHE_VERSION = 'v22';  // v22: 统一月度查询为 dateType=2（统一营业日月口径）
 
 function lsClearOldCache() {
   // 检查是否需要清理旧缓存
@@ -998,11 +990,8 @@ async function loadAllData() {
 
   const shopIds = ALL_SHOPS.map(s => s.centerId);
 
-  // ── 从 localStorage 恢复历史月份缓存（0 API 请求）──
-  updateProgress(10, '恢复本地缓存…');
-  lsRestoreMonths(); // 填充 loadedMonths
-
   // 初始化数据结构（直接使用 DATA 对象，确保所有函数操作同一引用）
+  // 注：缓存恢复已在 DOMContentLoaded 入口完成，此处不再重复
   const monthlyData = DATA.monthlyData;
   const yearlyData  = DATA.yearlyData;
   const shopMonthlyData = DATA.shopMonthlyData;
@@ -1010,48 +999,6 @@ async function loadAllData() {
   ALL_SHOPS.forEach(s => {
     if (!shopMonthlyData[s.centerId]) shopMonthlyData[s.centerId] = {};
     if (!shopYearlyData[s.centerId]) shopYearlyData[s.centerId] = {};
-  });
-
-  // 从 localStorage 加载已缓存的历史月份数据
-  let cacheHit = 0;
-  loadedMonths.forEach(mKey => {
-    const cached = lsLoadMonth(mKey);
-    if (cached) {
-      monthlyData[mKey] = cached.total || 0;
-      Object.entries(cached.shops || {}).forEach(([cid, amt]) => {
-        const n = Number(cid);
-        if (shopMonthlyData[n]) shopMonthlyData[n][mKey] = amt;
-      });
-      cacheHit++;
-    }
-  });
-
-  // ⚠️ 先清空年度汇总，防止页面刷新时重复累加
-  Object.keys(yearlyData).forEach(k => delete yearlyData[k]);
-  Object.keys(shopYearlyData).forEach(sid => {
-    if (shopYearlyData[sid]) Object.keys(shopYearlyData[sid]).forEach(k => delete shopYearlyData[sid][k]);
-  });
-
-  // 年度汇总（从已缓存月份累加）
-  Object.entries(monthlyData).forEach(([mKey, total]) => {
-    const yKey = mKey.slice(0, 4);
-    yearlyData[yKey] = (yearlyData[yKey] || 0) + total;
-    Object.entries(shopMonthlyData).forEach(([cid, months]) => {
-      if (months[mKey]) {
-        // 用 ?? 0 确保 undefined 时不减法仍能正确赋初始值
-        shopYearlyData[Number(cid)][yKey] = (shopYearlyData[Number(cid)][yKey] ?? 0) + months[mKey];
-      }
-    });
-  });
-
-  // 年度汇总已由 monthlyData 实时累加生成，不再从 localStorage 加载旧缓存覆盖
-  // 原因：lsLoadYearlyData() 可能加载到旧版本的错误缓存数据，导致年度汇总被污染
-  console.log(`[缓存恢复] ${cacheHit} 个月份已加载，共 ${Object.keys(monthlyData).length} 个有数据月份`);
-  // 诊断：打印广安门店(247415)各年份年度汇总
-  const guanAnSid = 247415;
-  ['2025','2026'].forEach(y => {
-    const v = shopYearlyData[guanAnSid]?.[y];
-    console.log(`[诊断] 广安门店 ${y} 年度汇总: ${v} (${typeof v})`);
   });
 
   // 初始化日数据
@@ -1750,7 +1697,26 @@ function updateOccupyCtrl() {
 }
 
 // ════════ 出租率渲染 ════════
+// 说明：全局加载时会自动后台预加载当日出租率数据到 OCC_DATA
+// 切换 Tab 时若 OCC_DATA 已就绪则直接呈现，无需再查询
 async function renderOccupancy() {
+  // 若出租率数据已预加载完毕，直接呈现（不显示加载状态）
+  if (OCC_DATA) {
+    // 确定查询日期/月份/年份
+    let settleDate = STATE.occDateA;
+    let dateType = 1;
+    if (STATE.occDim === 'month') {
+      settleDate = `${STATE.occYearA}-${p(STATE.occMonthA)}-01`;
+      dateType = 2;
+    } else if (STATE.occDim === 'year') {
+      settleDate = `${STATE.occYearA}`;
+      dateType = 3;
+    }
+    renderOccupancyTable(OCC_DATA, settleDate);
+    return;
+  }
+
+  // 未预加载时，显示加载状态并查询
   const loadingEl = document.getElementById('occ-loading');
   const tbody = document.getElementById('occ-tbody');
   if (loadingEl) { loadingEl.style.display = ''; }
@@ -2901,12 +2867,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   };
 
   DATA = initDATA();
-  initSelectors();
 
-  // 先执行缓存版本清理（必须在 hasCache 判断前，防止旧 meta 误判为有缓存）
+  // 缓存版本清理必须先执行，再判断 hasCache
   lsClearOldCache();
 
-  // 检查是否有缓存数据（lsClearOldCache 之后判断，避免旧 meta 残留导致误判）
+  // 检查是否有缓存
   const hasCache = (() => {
     try {
       const meta = localStorage.getItem(LS_META);
@@ -2916,8 +2881,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     } catch { return false; }
   })();
 
-    // 尝试恢复缓存
-    lsRestoreMonths();
+  // ── 有缓存：先恢复缓存数据，再初始化选择器，然后直接呈现 ──
+  if (hasCache) {
+    lsRestoreMonths(); // 填充 loadedMonths
     const monthlyData = DATA.monthlyData;
     const yearlyData = DATA.yearlyData;
     const shopMonthlyData = DATA.shopMonthlyData;
@@ -2935,42 +2901,78 @@ window.addEventListener('DOMContentLoaded', async () => {
         cacheHit++;
       }
     });
-
-    if (cacheHit > 0) {
-      // 有有效缓存：立即渲染 + 后台刷新
-      Object.entries(monthlyData).forEach(([mKey, total]) => {
-        const yKey = mKey.slice(0, 4);
-        yearlyData[yKey] = (yearlyData[yKey] || 0) + total;
-        Object.entries(shopMonthlyData).forEach(([cid, months]) => {
-          if (months[mKey]) {
-            if (!shopYearlyData[cid]) shopYearlyData[cid] = {};
-            shopYearlyData[cid][yKey] = (shopYearlyData[cid][yKey] || 0) + months[mKey];
-          }
-        });
+    // 汇总到年度
+    Object.entries(monthlyData).forEach(([mKey, total]) => {
+      const yKey = mKey.slice(0, 4);
+      yearlyData[yKey] = (yearlyData[yKey] || 0) + total;
+      Object.entries(shopMonthlyData).forEach(([cid, months]) => {
+        if (months[mKey]) {
+          if (!shopYearlyData[cid]) shopYearlyData[cid] = {};
+          shopYearlyData[cid][yKey] = (shopYearlyData[cid][yKey] || 0) + months[mKey];
+        }
       });
-      DATA.summary = {
-        today: 0,
-        currentMonth: monthlyData[`${new Date().getFullYear()}-${p(new Date().getMonth()+1)}`] || 0,
-        currentYear: yearlyData[String(new Date().getFullYear())] || 0,
-      };
-      document.getElementById('loading-mask').style.display = 'none';
-      render();
-      console.log(`[缓存秒进] ${cacheHit} 个月份已恢复，立即渲染`);
+    });
+    // 填充 availableMonths（让 initSelectors 能读到正确的月份列表）
+    const availableMonths = [...loadedMonths].sort();
+    const curYear = new Date().getFullYear();
+    const availableYears = [...new Set(availableMonths.map(k => parseInt(k.slice(0, 4))))].sort();
+    DATA.availableMonths = availableMonths;
+    DATA.availableYears = availableYears;
 
-      // 后台静默刷新最新数据
-      loadAllData().then(() => {
-        render();
-        console.log('[后台刷新] 数据已更新');
-      }).catch(err => {
-        console.error('[后台刷新失败]', err);
-      });
-    } else {
-    // 无缓存：等全局加载完再呈现
+    // 初始化选择器（有缓存数据后才能正确渲染下拉选项）
+    initSelectors();
+
+    // 立即呈现，不等待
+    document.getElementById('loading-mask').style.display = 'none';
+    render();
+    console.log(`[有缓存] ${cacheHit} 个月份已恢复，直接呈现`);
+
+    // 后台静默刷新最新月数据 + 预加载（不阻塞 UI）
+    // 同时后台预加载当日出租率数据，切换到出租率Tab时直接呈现
     loadAllData().then(() => {
-      document.getElementById('loading-mask').style.display = 'none';
       render();
+      console.log('[后台刷新] 最新数据已更新');
+    }).catch(err => {
+      console.error('[后台刷新失败]', err);
+    });
+    // 出租率数据后台预加载（当日，切换Tab时直接呈现）
+    const occToday = `${new Date().getFullYear()}-${p(new Date().getMonth()+1)}-${p(new Date().getDate())}`;
+    queryOccupancyAll(occToday, 1).then(result => {
+      OCC_DATA = result;
+      // 如果当前已切换到出租率Tab，立即渲染
+      if (STATE.dim === 'occupy') renderOccupancyTable(result, occToday);
+      console.log('[出租率预加载] 当日数据已就绪');
+    }).catch(e => {
+      console.warn('[出租率预加载失败]', e.message);
+    });
+
+  } else {
+  // ── 无缓存：显示加载遮罩，等全部加载完再呈现 ──
+    // 出租率数据与主数据并行加载（不阻塞加载遮罩）
+    const occToday = `${new Date().getFullYear()}-${p(new Date().getMonth()+1)}-${p(new Date().getDate())}`;
+    queryOccupancyAll(occToday, 1).then(result => {
+      OCC_DATA = result;
+      console.log('[出租率预加载] 当日数据已就绪');
+    }).catch(e => {
+      console.warn('[出租率预加载失败]', e.message);
+    });
+
+    loadAllData().then(result => {
+      // 把 loadAllData 返回的 availableMonths/availableYears 写入 DATA
+      // 这样 initSelectors() 才能读到正确的下拉选项
+      DATA.availableMonths = result.availableMonths || [];
+      DATA.availableYears  = result.availableYears  || [];
+      DATA.curYear  = result.curYear;
+      DATA.curMonth = result.curMonth;
+      DATA.today    = result.today;
+      DATA.generatedAt = result.generatedAt;
+      initSelectors(); // 加载完成后初始化选择器
+      document.getElementById('loading-mask').style.display = 'none';
+      render(); // 加载完毕后统一呈现
+      console.log('[无缓存] 全量加载完成，呈现完整数据');
     }).catch(err => {
       console.error('数据加载异常:', err);
+      initSelectors();
       document.getElementById('loading-mask').style.display = 'none';
       const notice = document.getElementById('notice-bar');
       if (notice) {
