@@ -620,7 +620,7 @@ async function queryMonthBillList(year, month, centerId, shopId, retry = 0) {
     if (apiCode !== '0' && apiCode !== 0) {
       apiStatus = `api_error:${apiCode}`;
       // token 失效时自动刷新并重试（最多1次）
-      const tokenErrors = ['-400003', '-400002', '-400001', '401', '403'];
+      const tokenErrors = ['-400004', '-400003', '-400002', '-400001', '401', '403'];
       if (retry === 0 && (tokenErrors.includes(String(apiCode)) || json?.msg?.includes('token') || json?.msg?.includes('Token'))) {
         console.warn(`[月度汇总 Token失效] ${monthStr} ${shopNameResolved}: code=${apiCode}, 刷新token后重试…`);
         token = await getToken();
@@ -716,7 +716,7 @@ async function queryShopRooms(shopId, retry = 0) {
   } catch (e) {
     console.warn(`[包间数查询失败] shopId=${shopId}`, e.message);
     // token 失效时自动刷新并重试（最多1次）
-    const tokenErrors = ['-400003', '-400002', '-400001', '401', '403'];
+    const tokenErrors = ['-400004', '-400003', '-400002', '-400001', '401', '403'];
     if (retry === 0 && (tokenErrors.includes(String(apiCode)) || e.message.includes('token'))) {
       token = await getToken();
       if (token) return queryShopRooms(shopId, 1);
