@@ -762,9 +762,9 @@ async function queryBookOrders(shopId, beginDate, endDate) {
     list.forEach(b => {
       // 排除已取消
       if ((b.bookState || '').includes('取消')) return;
-      const shift = b.shift || '';
-      if (shift.includes('午')) noon++;
-      else if (shift.includes('晚')) evening++;
+      const shiftRaw = b.shift || b.shift_name || '';
+      if (shiftRaw.includes('午')) noon++;
+      else if (shiftRaw.includes('晚')) evening++;
     });
   } catch (e) {
     console.warn(`[预订查询失败] 门店${shopId} ${beginDate}~${endDate}`, e.message);
@@ -806,9 +806,14 @@ async function queryWalkInBaojian(shopId, beginDate, endDate) {
           // 只统计包间类型
           const pointType = b.point_type_name || '';
           if (!pointType.includes('包间')) return;
-          const shift = b.shift || '';
-          if (shift.includes('午')) noon++;
-          else if (shift.includes('晚')) evening++;
+          // 调试日志：打印所有可能的午/晚市字段
+          if (b.shift || b.open_shift_id || b.shift_name) {
+            console.log(`[walkin包间] 流水=${b.billCode||b.serialNo||b.bill_no} shift=${b.shift} open_shift_id=${b.open_shift_id} shift_name=${b.shift_name}`);
+          }
+          // 提取午/晚市标识：兼容多种字段名
+          const shiftRaw = b.shift || b.open_shift_id || b.shift_name || '';
+          if (shiftRaw.includes('午')) noon++;
+          else if (shiftRaw.includes('晚')) evening++;
         });
         const totalPages = json?.data?.pageInfo?.pageTotal || 1;
         if (pageNo >= totalPages) { hasMore = false; }
