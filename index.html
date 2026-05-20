@@ -760,12 +760,16 @@ async function queryBookOrders(shopId, beginDate, endDate) {
     const json = await res.json();
     const list = json?.data?.data || [];
     list.forEach(b => {
-      // 排除已取消
-      if ((b.bookState || '').includes('取消')) return;
+      const state = b.bookState || '';
+      // 排除已取消、已完成、已结算的预订（这些已结算记录会在 getserialdata 中体现，避免重复计算）
+      if (state.includes('取消')) return;
+      if (state.includes('完成') || state.includes('已结') || state.includes('结算') || state.includes('结账')) return;
       const shiftRaw = b.shift || b.shift_name || '';
       if (shiftRaw.includes('午')) noon++;
       else if (shiftRaw.includes('晚')) evening++;
     });
+    // 调试：输出该门店预订统计情况
+    console.log(`[预订调试] shop=${shopId} 日期=${beginDate}~${endDate} 午=${noon} 晚=${evening} (排除取消/已结算后)`);
   } catch (e) {
     console.warn(`[预订查询失败] 门店${shopId} ${beginDate}~${endDate}`, e.message);
   }
@@ -820,16 +824,25 @@ async function queryWalkInBaojian(shopId, beginDate, endDate) {
         clearTimeout(tid);
         const json = await res.json();
         const list = json?.data?.billList || [];
+        let skipBook = 0, skipNotRoom = 0;
         list.forEach(b => {
           // order_type=2 是预订单，跳过（预订已单独统计）
-          if (String(b.order_type) === '2') return;
+          if (String(b.order_type) === '2') { skipBook++; return; }
+          // 如果账单有关联预订的字段，也跳过（避免预订已结算后重复计算）
+          if (b.book_id || b.bookId || b.booking_id || b.bookingId ||
+              b.booking_no || b.bookNo || b.reservation_id || b.reservationId) {
+            skipBook++; return;
+          }
           // 用 point_name 判断是否包间
-          if (!isPrivateRoom(b.point_name)) return;
+          if (!isPrivateRoom(b.point_name)) { skipNotRoom++; return; }
           // 用 open_time 判断午/晚市
           const shift = getShiftByOpenTime(b.open_time);
           if (shift === 'noon') noon++;
           else if (shift === 'evening') evening++;
         });
+        if (list.length > 0) {
+          console.log(`[walkin调试] shop=${shopId} date=${dateStr} 总=${list.length} 跳过预订=${skipBook} 跳过非包间=${skipNotRoom} 统计午=${noon} 晚=${evening}`);
+        }
         const totalPages = json?.data?.pageInfo?.pageTotal || 1;
         if (pageNo >= totalPages) { hasMore = false; }
         else { pageNo++; }
