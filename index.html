@@ -829,9 +829,20 @@ async function queryWalkInBaojian(shopId, beginDate, endDate) {
             console.log(`  [${i+1}] point=${b.point_name} order_type=${b.order_type} open_time=${b.open_time}`);
           });
         }
+        // 调试：输出朝阳店(247413)所有包间账单详情（含续单字段）
+        if (shopId === 247413 && list.length > 0) {
+          const roomBills = list.filter(b => isPrivateRoom(b.point_name));
+          const continued = roomBills.filter(b => b.is_continued_bill === true || String(b.is_continued_bill).toLowerCase() === 'true');
+          console.log(`[walkin详情] shop=${shopId} date=${dateStr} 包间=${roomBills.length} 续单=${continued.length}`);
+          roomBills.forEach((b, i) => {
+            console.log(`  [${i+1}] point=${b.point_name} order_type=${b.order_type} open_time=${b.open_time} is_continued=${b.is_continued_bill}`);
+          });
+        }
         list.forEach(b => {
           // order_type=2 是预订单，跳过（预订已单独统计）
           if (String(b.order_type) === '2') return;
+          // is_continued_bill=true 是续单，跳过（同一桌已算过一次）
+          if (b.is_continued_bill === true || String(b.is_continued_bill).toLowerCase() === 'true') return;
           // 用 point_name 判断是否包间
           if (!isPrivateRoom(b.point_name)) return;
           // 用 open_time 判断午/晚市
