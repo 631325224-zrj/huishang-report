@@ -715,7 +715,6 @@ async function queryShopRooms(shopId, retry = 0) {
       rooms += roomCount;
     });
   } catch (e) {
-    console.warn(`[包间数查询失败] shopId=${shopId} retry=${retry}`, e.message);
     const tokenErrors = ['-400004', '-400003', '-400002', '-400001', '401', '403'];
     const isTokenErr = tokenErrors.includes(String(apiCode)) || e.message.includes('token');
     // 第一次失败：刷新token立即重试
@@ -729,7 +728,8 @@ async function queryShopRooms(shopId, retry = 0) {
       token = await getToken();
       if (token) return queryShopRooms(shopId, 2);
     }
-    // 第三次失败或网络错误：返回0，不缓存
+    // 第三次失败或网络错误：打印日志并返回0，不缓存
+    console.warn(`[包间数查询失败] shopId=${shopId} retry=${retry}`, e.message);
     return rooms;
   }
   OCCUPY_CACHE[cacheKey] = rooms;
@@ -759,6 +759,12 @@ async function queryBookOrders(shopId, beginDate, endDate) {
     clearTimeout(tid);
     const json = await res.json();
     const list = json?.data?.data || [];
+    // 调试：输出朝阳店(247413)所有预订的bookState分布
+    if (shopId === 247413) {
+      const stateMap = {};
+      list.forEach(b => { const s = b.bookState || '(空)'; stateMap[s] = (stateMap[s]||0)+1; });
+      console.log(`[预订详情] shop=${shopId} 日期=${beginDate}~${endDate} 总预订=${list.length} bookState分布:`, stateMap);
+    }
     list.forEach(b => {
       const state = b.bookState || '';
       // 排除已取消、已完成、已结算的预订（这些已结算记录会在 getserialdata 中体现，避免重复计算）
@@ -825,6 +831,14 @@ async function queryWalkInBaojian(shopId, beginDate, endDate) {
         const json = await res.json();
         const list = json?.data?.billList || [];
         let skipBook = 0, skipNotRoom = 0;
+        // 调试：输出朝阳店(247413)所有账单的point_name和order_type
+        if (shopId === 247413 && list.length > 0) {
+          const roomBills = list.filter(b => isPrivateRoom(b.point_name));
+          console.log(`[walkin详情] shop=${shopId} date=${dateStr} 包间账单=${roomBills.length}/${list.length}`);
+          roomBills.forEach((b, i) => {
+            console.log(`  [${i+1}] point=${b.point_name} order_type=${b.order_type} open_time=${b.open_time} book_id=${b.book_id||b.bookId||''}`);
+          });
+        }
         list.forEach(b => {
           // order_type=2 是预订单，跳过（预订已单独统计）
           if (String(b.order_type) === '2') { skipBook++; return; }
