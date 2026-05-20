@@ -776,6 +776,26 @@ async function queryBookOrders(shopId, beginDate, endDate) {
 
 // 查询单门店指定日期范围非预订包间账单数（getserialdata）
 // 返回 { noon: N, evening: N }（非预订且 point_type_name 含"包间"的账单数）
+// 判断 point_name 是否为包间客位：
+// 不含数字、不含字母、不含"外"、不含"盒" → 算包间
+function isPrivateRoom(pointName) {
+  if (!pointName) return false;
+  if (/[0-9a-zA-Z]/.test(pointName)) return false;
+  if (pointName.includes('外') || pointName.includes('盒')) return false;
+  return true;
+}
+
+// 根据 open_time 判断午/晚市：< 16:00 → 午市，≥ 16:00 → 晚市
+// open_time 可能为 "2026-05-19 11:30:00" 或 "11:30:00" 格式
+function getShiftByOpenTime(openTime) {
+  if (!openTime) return null;
+  // 取时间部分（最后一个空格后面，或直接是 HH:MM:SS）
+  const timePart = String(openTime).trim().split(' ').pop();
+  const hour = parseInt(timePart.split(':')[0], 10);
+  if (isNaN(hour)) return null;
+  return hour < 16 ? 'noon' : 'evening';
+}
+
 async function queryWalkInBaojian(shopId, beginDate, endDate) {
   const cacheKey = `walkin_${shopId}_${beginDate}_${endDate}`;
   if (OCCUPY_CACHE[cacheKey] !== undefined) return OCCUPY_CACHE[cacheKey];
@@ -801,24 +821,14 @@ async function queryWalkInBaojian(shopId, beginDate, endDate) {
         const json = await res.json();
         const list = json?.data?.billList || [];
         list.forEach(b => {
-          // 只打印第一条包间记录的完整键名（调试用）
-          const pointType = b.point_type_name || '';
-          if (pointType.includes('包间') && !window._loggedKeys) {
-            window._loggedKeys = true;
-            console.log('[getserialdata 包间记录键名]', Object.keys(b).join(', '));
-          }
           // order_type=2 是预订单，跳过（预订已单独统计）
           if (String(b.order_type) === '2') return;
-          // 只统计包间类型
-          if (!pointType.includes('包间')) return;
-          // 调试日志：打印所有非预订包间记录的关键字段
-          const oid = b.billCode || b.serialNo || b.bill_no || b.bill_id || '?';
-          const shiftFields = { shift: b.shift, open_shift_id: b.open_shift_id, shift_name: b.shift_name, sale_shift: b.sale_shift, meal_type: b.meal_type, dinner_type: b.dinner_type };
-          console.log(`[walkin包间] 流水=${oid} order_type=${b.order_type} point_type=${pointType}`, shiftFields);
-          // 提取午/晚市标识：兼容多种字段名
-          const shiftRaw = b.shift || b.open_shift_id || b.shift_name || b.sale_shift || b.meal_type || b.dinner_type || '';
-          if (String(shiftRaw).includes('午')) noon++;
-          else if (String(shiftRaw).includes('晚')) evening++;
+          // 用 point_name 判断是否包间
+          if (!isPrivateRoom(b.point_name)) return;
+          // 用 open_time 判断午/晚市
+          const shift = getShiftByOpenTime(b.open_time);
+          if (shift === 'noon') noon++;
+          else if (shift === 'evening') evening++;
         });
         const totalPages = json?.data?.pageInfo?.pageTotal || 1;
         if (pageNo >= totalPages) { hasMore = false; }
