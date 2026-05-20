@@ -1766,7 +1766,12 @@ function bindEvents() {
   }
   const btnQueryOcc = document.getElementById('btnQueryOccupy');
   if (btnQueryOcc) {
-    btnQueryOcc.addEventListener('click', () => renderOccupancy());
+    btnQueryOcc.addEventListener('click', () => {
+      // 用户主动查询：清除缓存，强制重新拉取
+      OCC_DATA = null;
+      Object.keys(OCCUPY_CACHE).forEach(k => delete OCCUPY_CACHE[k]);
+      renderOccupancy();
+    });
   }
 
   // 🔍 年维度探测按钮
