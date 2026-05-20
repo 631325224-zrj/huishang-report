@@ -785,7 +785,7 @@ async function queryBookOrders(shopId, beginDate, endDate) {
 function isPrivateRoom(pointName) {
   if (!pointName) return false;
   if (/[0-9a-zA-Z]/.test(pointName)) return false;
-  if (pointName.includes('外') || pointName.includes('盒')) return false;
+  if (pointName.includes('外') || pointName.includes('盒') || pointName.includes('宴')) return false;
   return true;
 }
 
